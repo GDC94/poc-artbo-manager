@@ -7,16 +7,29 @@ import type { FolderKey } from "@/lib/files/folders";
 import type { FileStatus, StoredFile } from "@/lib/files/reducer";
 import { useFiles } from "@/lib/files/store";
 
-/** Records an admin decision on a file and confirms it in a toast. */
+/** Admin review actions on a file, each confirmed in a toast. */
 export function useReview() {
-  const { setFileStatus } = useFiles();
+  const { setFileStatus, setFileComment } = useFiles();
   const { toast } = useToast();
 
-  return useCallback(
-    (folder: FolderKey, file: StoredFile, status: Exclude<FileStatus, "pending">) => {
+  /** Records a decision; a `comment` (the dirty draft) is saved in the same action. */
+  const review = useCallback(
+    (folder: FolderKey, file: StoredFile, status: Exclude<FileStatus, "pending">, comment?: string) => {
+      if (comment !== undefined) setFileComment(folder, file.id, comment);
       setFileStatus(folder, file.id, status);
-      toast(`${file.name} ${status === "approved" ? "aprobado" : "rechazado"}`);
+      const decision = status === "approved" ? "aprobado" : "rechazado";
+      toast(comment !== undefined ? `${file.name} ${decision} con comentario` : `${file.name} ${decision}`);
     },
-    [setFileStatus, toast],
+    [setFileStatus, setFileComment, toast],
   );
+
+  const comment = useCallback(
+    (folder: FolderKey, file: StoredFile, text: string) => {
+      setFileComment(folder, file.id, text);
+      toast(text.trim() ? "Comentario guardado" : "Comentario eliminado");
+    },
+    [setFileComment, toast],
+  );
+
+  return { review, comment };
 }

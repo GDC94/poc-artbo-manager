@@ -6,6 +6,9 @@ import { countPending, normalizeFolders, type StoredFile, type StoredFolders } f
 
 export const LEGACY_FILES_KEY = "artbo:files:v1";
 
+/** Fired on `window` after a files write reached IndexedDB, so same-tab readers (the bell) can refresh. */
+export const FILES_CHANGED_EVENT = "artbo:files:changed";
+
 /** IndexedDB key of one owner's files (no owner keeps the legacy, unowned key). */
 export function filesKey(ownerId?: string): string {
   return ownerKey(LEGACY_FILES_KEY, ownerId);

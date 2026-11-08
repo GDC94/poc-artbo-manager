@@ -4,8 +4,10 @@ import { Check, FileText, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 
+
 import { CARD_SURFACE_FILL_CLASSNAME } from "@/components/app/shared/cardSurface";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { EASE_OUT } from "@/lib/ease";
 import { formatSize } from "@/lib/files/format";
 import type { FileStatus, StoredFile } from "@/lib/files/reducer";
@@ -42,17 +44,28 @@ type Props = {
   file: StoredFile;
   onRemove: (file: StoredFile) => void;
   /** Admin only: when set, shows the approve/reject actions for the states the file is not in. */
-  onReview?: (file: StoredFile, status: Exclude<FileStatus, "pending">) => void;
+  onReview?: (file: StoredFile, status: Exclude<FileStatus, "pending">, comment?: string) => void;
+  /** Admin only: with `onReview`, shows the comment box; the participant sees the saved comment read-only. */
+  onComment?: (file: StoredFile, comment: string) => void;
   className?: string;
 };
 
 /** One file as a horizontal card: preview, name and status on one line; the admin's decision in a footer. */
-export function FileThumb({ file, onRemove, onReview, className }: Props) {
+export function FileThumb({ file, onRemove, onReview, onComment, className }: Props) {
   const url = useImageUrl(file);
   const reduce = useReducedMotion();
   const extension = file.name.includes(".") ? file.name.split(".").pop()?.slice(0, 5) : null;
   const badge = STATUS_BADGE[file.status];
   const undecided = file.status === "pending";
+  const saved = file.comment ?? "";
+  const [draft, setDraft] = useState(saved);
+  const [prevSaved, setPrevSaved] = useState(saved);
+  // Adopt a comment saved elsewhere (or just now) unless the admin is mid-edit on something else.
+  if (saved !== prevSaved) {
+    setPrevSaved(saved);
+    if (draft === prevSaved || draft.trim() === saved) setDraft(saved);
+  }
+  const dirty = draft.trim() !== saved;
 
   return (
     <li
@@ -114,7 +127,7 @@ export function FileThumb({ file, onRemove, onReview, className }: Props) {
       {onReview ? (
         <div
           className={cn(
-            "order-3 col-span-2 flex gap-2 border-t border-white/[0.07] p-2.5",
+            "order-4 col-span-2 flex gap-2 border-t border-white/[0.07] p-2.5",
             "@2xl:order-2 @2xl:col-span-1 @2xl:border-t-0 @2xl:p-0 @2xl:pr-2",
             !undecided && "justify-end",
           )}
@@ -127,7 +140,7 @@ export function FileThumb({ file, onRemove, onReview, className }: Props) {
               shape="pill"
               className={cn(undecided && "flex-1 @2xl:flex-none", PRESS)}
               aria-label={`Rechazar ${file.name}`}
-              onClick={() => onReview(file, "rejected")}
+              onClick={() => onReview(file, "rejected", dirty ? draft : undefined)}
             >
               Rechazar
             </Button>
@@ -140,12 +153,46 @@ export function FileThumb({ file, onRemove, onReview, className }: Props) {
               variant={undecided ? "default" : "subtle"}
               className={cn(undecided && "flex-1 @2xl:flex-none", PRESS)}
               aria-label={`Aprobar ${file.name}`}
-              onClick={() => onReview(file, "approved")}
+              onClick={() => onReview(file, "approved", dirty ? draft : undefined)}
             >
               <Check aria-hidden />
               Aprobar
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Own full-width row: after the main row on narrow cards, below the one-row layout on wide ones. */}
+      {onReview && onComment ? (
+        <div className="order-3 col-span-full space-y-2 border-t border-white/[0.07] p-2.5 @2xl:order-4 @2xl:px-3">
+          <Textarea
+            rows={2}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Deja un comentario sobre este archivo"
+            aria-label={`Comentario para ${file.name}`}
+            className="min-h-0 resize-none rounded-lg border-white/10 bg-black/20 px-2.5 py-2 text-sm text-white placeholder:text-white/35 md:text-sm"
+          />
+          {dirty ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="subtle"
+                size="sm"
+                shape="pill"
+                className={PRESS}
+                aria-label={`Guardar comentario de ${file.name}`}
+                onClick={() => onComment(file, draft)}
+              >
+                Guardar comentario
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : !onReview && file.comment ? (
+        <div className="order-3 col-span-full border-t border-white/[0.07] px-3 py-2.5 @2xl:order-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-white/45">Comentario del administrador</p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/80">{file.comment}</p>
         </div>
       ) : null}
       </div>

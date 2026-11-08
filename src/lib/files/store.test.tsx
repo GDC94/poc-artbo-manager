@@ -13,7 +13,7 @@ vi.mock("idb-keyval", () => ({
   del: async (k: string) => void db.delete(k),
 }));
 
-import { filesKey, LEGACY_FILES_KEY } from "./persistence";
+import { FILES_CHANGED_EVENT, filesKey, LEGACY_FILES_KEY } from "./persistence";
 import { FilesProvider, useFiles } from "./store";
 
 const stored = (id: string, status?: string) => ({
@@ -27,7 +27,7 @@ const stored = (id: string, status?: string) => ({
 });
 
 function Probe() {
-  const { state, addFiles, setFileStatus } = useFiles();
+  const { state, addFiles, setFileStatus, setFileComment } = useFiles();
   const files = state.folders.logos ?? [];
   return (
     <div>
@@ -39,6 +39,7 @@ function Probe() {
       </ul>
       <button onClick={() => addFiles("logos", [new File(["x"], "n.png", { type: "image/png" })])}>add</button>
       <button onClick={() => setFileStatus("logos", "a", "approved")}>approve-a</button>
+      <button onClick={() => setFileComment("logos", "a", "Falta fondo")}>comment-a</button>
       <button onClick={() => setFileStatus("logos", "nope", "approved")}>approve-unknown</button>
     </div>
   );
@@ -92,6 +93,41 @@ describe("FilesProvider", () => {
 
     mount();
     expect(await screen.findByText("a:approved")).toBeTruthy();
+  });
+
+  it("stamps the decision time and announces the write once it resolves", async () => {
+    db.set(filesKey("p-01"), { logos: [stored("a")] });
+    const changed = vi.fn();
+    window.addEventListener(FILES_CHANGED_EVENT, changed);
+    mount();
+    await hydrated();
+    fireEvent.click(screen.getByText("approve-a"));
+    await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+    window.removeEventListener(FILES_CHANGED_EVENT, changed);
+    const saved = (db.get(filesKey("p-01")) as { logos: { reviewedAt?: number }[] }).logos[0];
+    expect(typeof saved.reviewedAt).toBe("number");
+  });
+
+  it("persists a comment with its timestamp", async () => {
+    db.set(filesKey("p-01"), { logos: [stored("a")] });
+    mount();
+    await hydrated();
+    fireEvent.click(screen.getByText("comment-a"));
+    await waitFor(() => expect(setSpy).toHaveBeenCalledTimes(1));
+    const saved = (db.get(filesKey("p-01")) as { logos: { comment?: string; commentedAt?: number }[] }).logos[0];
+    expect(saved.comment).toBe("Falta fondo");
+    expect(typeof saved.commentedAt).toBe("number");
+  });
+
+  it("does not announce anything when nothing was written", async () => {
+    db.set(filesKey("p-01"), { logos: [stored("a")] });
+    const changed = vi.fn();
+    window.addEventListener(FILES_CHANGED_EVENT, changed);
+    mount();
+    await hydrated();
+    await act(async () => {});
+    window.removeEventListener(FILES_CHANGED_EVENT, changed);
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it("ignores a decision for an unknown file without writing", async () => {

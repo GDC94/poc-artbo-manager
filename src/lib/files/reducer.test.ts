@@ -128,7 +128,7 @@ describe("file review status", () => {
 
   it("sets the status of one file", () => {
     let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a"), entry("b")] });
-    state = filesReducer(state, { type: "setStatus", folder: "logos", id: "a", status: "rejected" });
+    state = filesReducer(state, { type: "setStatus", folder: "logos", id: "a", status: "rejected", at: 50 });
     expect(Object.fromEntries(state.folders.logos.map((f) => [f.id, f.status]))).toEqual({
       a: "rejected",
       b: "pending",
@@ -137,8 +137,58 @@ describe("file review status", () => {
 
   it("ignores a status change for an unknown id or folder", () => {
     const state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
-    expect(filesReducer(state, { type: "setStatus", folder: "logos", id: "zzz", status: "approved" })).toBe(state);
-    expect(filesReducer(state, { type: "setStatus", folder: "nada", id: "a", status: "approved" })).toBe(state);
+    expect(filesReducer(state, { type: "setStatus", folder: "logos", id: "zzz", status: "approved", at: 1 })).toBe(state);
+    expect(filesReducer(state, { type: "setStatus", folder: "nada", id: "a", status: "approved", at: 1 })).toBe(state);
+  });
+
+  it("stamps reviewedAt when a decision is recorded", () => {
+    let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
+    state = filesReducer(state, { type: "setStatus", folder: "logos", id: "a", status: "approved", at: 77 });
+    expect(state.folders.logos[0]).toMatchObject({ status: "approved", reviewedAt: 77 });
+  });
+
+  it("sets a trimmed comment with its timestamp", () => {
+    let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
+    state = filesReducer(state, { type: "setComment", folder: "logos", id: "a", comment: "  Falta fondo  ", at: 9 });
+    expect(state.folders.logos[0]).toMatchObject({ comment: "Falta fondo", commentedAt: 9 });
+    expect(state.revision).toBe(2);
+  });
+
+  it("clears the comment and its timestamp when the text is empty", () => {
+    let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
+    state = filesReducer(state, { type: "setComment", folder: "logos", id: "a", comment: "Hola", at: 9 });
+    state = filesReducer(state, { type: "setComment", folder: "logos", id: "a", comment: "   ", at: 10 });
+    expect(state.folders.logos[0]).not.toHaveProperty("comment");
+    expect(state.folders.logos[0]).not.toHaveProperty("commentedAt");
+  });
+
+  it("ignores a comment for an unknown file and an unchanged comment", () => {
+    let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
+    expect(filesReducer(state, { type: "setComment", folder: "logos", id: "zzz", comment: "x", at: 1 })).toBe(state);
+    state = filesReducer(state, { type: "setComment", folder: "logos", id: "a", comment: "x", at: 1 });
+    expect(filesReducer(state, { type: "setComment", folder: "logos", id: "a", comment: " x ", at: 2 })).toBe(state);
+  });
+
+  it("keeps review and comment fields through hydrate", () => {
+    const next = filesReducer(emptyState(), {
+      type: "hydrate",
+      folders: { logos: [{ ...entry("a"), status: "approved", reviewedAt: 5, comment: "ok", commentedAt: 6 }] },
+    });
+    expect(next.folders.logos[0]).toMatchObject({ reviewedAt: 5, comment: "ok", commentedAt: 6 });
+  });
+
+  it("refresh adopts a comment or decision made elsewhere", () => {
+    const base = filesReducer(emptyState(), { type: "hydrate", folders: { logos: [entry("a")] } });
+    const commented = filesReducer(base, {
+      type: "refresh",
+      folders: { logos: [{ ...entry("a"), comment: "hola", commentedAt: 3 }] },
+    });
+    expect(commented.folders.logos[0].comment).toBe("hola");
+    const redecided = filesReducer(commented, {
+      type: "refresh",
+      folders: { logos: [{ ...entry("a"), comment: "hola", commentedAt: 3, reviewedAt: 4 }] },
+    });
+    expect(redecided.folders.logos[0].reviewedAt).toBe(4);
   });
 
   it("stamps new entries with the given status", () => {
@@ -173,7 +223,7 @@ describe("file review status", () => {
     const hydrated = filesReducer(emptyState(), { type: "hydrate", folders: {} });
     const added = filesReducer(hydrated, { type: "add", folder: "logos", entries: [entry("a")] });
     expect(added.revision).toBe(hydrated.revision + 1);
-    const decided = filesReducer(added, { type: "setStatus", folder: "logos", id: "a", status: "approved" });
+    const decided = filesReducer(added, { type: "setStatus", folder: "logos", id: "a", status: "approved", at: 1 });
     expect(decided.revision).toBe(added.revision + 1);
   });
 });

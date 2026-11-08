@@ -37,6 +37,12 @@ describe("loadFiles with legacy migration", () => {
     expect(db.has(LEGACY_FILES_KEY)).toBe(false);
   });
 
+  it("keeps review and comment fields through the migration", async () => {
+    db.set(LEGACY_FILES_KEY, { logos: [{ ...file("a"), reviewedAt: 5, comment: "ok", commentedAt: 6 }] });
+    const folders = await loadFiles("p-01", { migrateLegacy: true });
+    expect(folders.logos[0]).toMatchObject({ reviewedAt: 5, comment: "ok", commentedAt: 6 });
+  });
+
   it("does not overwrite existing owned data and leaves legacy alone", async () => {
     db.set(filesKey("p-01"), { logos: [file("owned", "approved")] });
     db.set(LEGACY_FILES_KEY, { logos: [file("old")] });

@@ -30,7 +30,7 @@ export function FolderWorkspace({
   const { brand } = useBrand();
   const { state, removeFile } = useFiles();
   const upload = useUpload();
-  const review = useReview();
+  const { review, comment } = useReview();
   const files = folderFiles(state, folder.key);
   const { askRemoval, dialog } = useFileRemovalDialog((f) => removeFile(folder.key, f.id), {
     portal: true,
@@ -59,7 +59,8 @@ export function FolderWorkspace({
                 key={file.id}
                 file={file}
                 onRemove={askRemoval}
-                onReview={reviewable ? (f, status) => review(folder.key, f, status) : undefined}
+                onReview={reviewable ? (f, status, draft) => review(folder.key, f, status, draft) : undefined}
+                onComment={reviewable ? (f, text) => comment(folder.key, f, text) : undefined}
               />
             ))}
           </ul>

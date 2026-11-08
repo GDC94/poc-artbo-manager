@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import type { FolderKey } from "./folders";
-import { filesKey, loadFiles } from "./persistence";
+import { FILES_CHANGED_EVENT, filesKey, loadFiles } from "./persistence";
 import {
   createEntries,
   emptyState,
@@ -30,6 +30,8 @@ type Value = {
   removeFile: (folder: FolderKey, id: string) => void;
   /** Records the admin's decision on a file; unknown ids are ignored. */
   setFileStatus: (folder: FolderKey, id: string, status: FileStatus) => void;
+  /** Sets the admin's comment on a file; an empty text clears it. Unknown ids are ignored. */
+  setFileComment: (folder: FolderKey, id: string, comment: string) => void;
 };
 
 const FilesContext = createContext<Value | null>(null);
@@ -86,6 +88,10 @@ export function FilesProvider({
     persistedRevision.current = state.revision;
     writesInFlight.current += 1;
     set(filesKey(ownerId), state.folders)
+      .then(() => {
+        // Only once the data is readable by other surfaces.
+        window.dispatchEvent(new Event(FILES_CHANGED_EVENT));
+      })
       .catch(() => {
         /* quota or private mode: files stay in memory for this session */
       })
@@ -137,12 +143,16 @@ export function FilesProvider({
   }, []);
 
   const setFileStatus = useCallback((folder: FolderKey, id: string, status: FileStatus) => {
-    dispatch({ type: "setStatus", folder, id, status });
+    dispatch({ type: "setStatus", folder, id, status, at: Date.now() });
+  }, []);
+
+  const setFileComment = useCallback((folder: FolderKey, id: string, comment: string) => {
+    dispatch({ type: "setComment", folder, id, comment, at: Date.now() });
   }, []);
 
   const value = useMemo(
-    () => ({ state, addFiles, removeFile, setFileStatus }),
-    [state, addFiles, removeFile, setFileStatus],
+    () => ({ state, addFiles, removeFile, setFileStatus, setFileComment }),
+    [state, addFiles, removeFile, setFileStatus, setFileComment],
   );
   return <FilesContext.Provider value={value}>{children}</FilesContext.Provider>;
 }

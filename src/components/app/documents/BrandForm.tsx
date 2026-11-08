@@ -59,7 +59,7 @@ function BrandFormFields({
   const pickerRef = useRef<HTMLInputElement>(null);
   const pickerTarget = useRef<FolderKey | null>(null);
   const upload = useUpload();
-  const review = useReview();
+  const { review, comment } = useReview();
 
   const openPicker = (folder: FolderKey) => {
     pickerTarget.current = folder;
@@ -208,8 +208,15 @@ function BrandFormFields({
         }}
         onReviewFile={
           reviewable
-            ? (file, status) => {
-                if (sheetFolder) review(sheetFolder.key, file, status);
+            ? (file, status, draft) => {
+                if (sheetFolder) review(sheetFolder.key, file, status, draft);
+              }
+            : undefined
+        }
+        onCommentFile={
+          reviewable
+            ? (file, text) => {
+                if (sheetFolder) comment(sheetFolder.key, file, text);
               }
             : undefined
         }

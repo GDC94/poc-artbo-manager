@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Check, Menu } from "lucide-react";
 
+import { NotificationsBell } from "@/components/app/notifications/NotificationsBell";
 import { ArtboLogo } from "@/components/brand/artbo-logo";
 import { Popover } from "@/components/ui/popover";
 import { getInitials } from "@/lib/profile/initials";
@@ -43,6 +44,8 @@ export function Topbar({ onMenuToggle }: Props) {
           <ArtboLogo className="h-[35px] w-[125px] shrink-0" />
         </Link>
       </div>
+      <div className="flex items-center gap-1 lg:gap-2">
+      <NotificationsBell audience={admin ? "admin" : "participant"} />
       <Popover
         open={menuOpen}
         onOpenChange={setMenuOpen}
@@ -88,6 +91,7 @@ export function Topbar({ onMenuToggle }: Props) {
           ) : null}
         </nav>
       </Popover>
+      </div>
     </div>
   );
 }

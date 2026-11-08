@@ -11,6 +11,11 @@ export type StoredFile = {
   addedAt: number;
   blob: Blob;
   status: FileStatus;
+  /** When the admin last decided (approved/rejected). Absent on files nobody has reviewed. */
+  reviewedAt?: number;
+  /** The admin's note to the participant; absent when there is none. */
+  comment?: string;
+  commentedAt?: number;
 };
 
 type StoredFileInput = Omit<StoredFile, "status"> & { status?: FileStatus };
@@ -26,7 +31,10 @@ export type FilesState = {
 export type FilesAction =
   | { type: "add"; folder: FolderKey; entries: StoredFile[] }
   | { type: "remove"; folder: FolderKey; id: string }
-  | { type: "setStatus"; folder: FolderKey; id: string; status: FileStatus }
+  /** `at` is the decision time, passed in so the reducer stays pure. */
+  | { type: "setStatus"; folder: FolderKey; id: string; status: FileStatus; at: number }
+  /** Empty (after trimming) clears the comment. `at` is the time of the edit. */
+  | { type: "setComment"; folder: FolderKey; id: string; comment: string; at: number }
   | { type: "hydrate"; folders: StoredFolders }
   /** Re-read from storage while mounted: replaces the files without counting as an edit. */
   | { type: "refresh"; folders: StoredFolders };
@@ -72,7 +80,14 @@ function sameFolders(a: Record<FolderKey, StoredFile[]>, b: Record<FolderKey, St
     return (
       y !== undefined &&
       x.length === y.length &&
-      x.every((f, i) => f.id === y[i].id && f.status === y[i].status)
+      x.every(
+        (f, i) =>
+          f.id === y[i].id &&
+          f.status === y[i].status &&
+          f.reviewedAt === y[i].reviewedAt &&
+          f.comment === y[i].comment &&
+          f.commentedAt === y[i].commentedAt,
+      )
     );
   });
 }
@@ -109,7 +124,29 @@ export function filesReducer(state: FilesState, action: FilesAction): FilesState
         revision: state.revision + 1,
         folders: {
           ...state.folders,
-          [action.folder]: current.map((f) => (f.id === action.id ? { ...f, status: action.status } : f)),
+          [action.folder]: current.map((f) => (f.id === action.id ? { ...f, status: action.status, reviewedAt: action.at } : f)),
+        },
+      };
+    }
+    case "setComment": {
+      const current = folderFiles(state, action.folder);
+      const target = current.find((f) => f.id === action.id);
+      if (!target) return state;
+      const comment = action.comment.trim();
+      if (comment === (target.comment ?? "")) return state;
+      return {
+        ...state,
+        revision: state.revision + 1,
+        folders: {
+          ...state.folders,
+          [action.folder]: current.map((f) => {
+            if (f.id !== action.id) return f;
+            // An empty comment removes both fields so the file looks as if never commented.
+            const next: StoredFile = { ...f };
+            delete next.comment;
+            delete next.commentedAt;
+            return comment ? { ...next, comment, commentedAt: action.at } : next;
+          }),
         },
       };
     }

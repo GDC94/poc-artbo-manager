@@ -6,17 +6,12 @@ import { readLocal, writeLocal } from "@/lib/storage/local";
 
 import { isParticipant } from "./participants";
 import { isRequirement } from "./requirements";
+import { isArrayOf, PARTICIPANTS_KEY } from "./storage";
 import { adminReducer, initialAdminState, type AdminState } from "./state";
 import type { Participant, ParticipantInput, Requirement } from "./types";
 
-const PARTICIPANTS_KEY = "artbo:admin:participants:v1";
 const REQUIREMENTS_KEY = "artbo:admin:requirements:v2";
 const SELECTIONS_KEY = "artbo:admin:selections:v2";
-
-const isArrayOf =
-  <T,>(guard: (v: unknown) => v is T) =>
-  (value: unknown): value is T[] =>
-    Array.isArray(value) && value.every(guard);
 
 function isSelections(value: unknown): value is Record<string, string[]> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;

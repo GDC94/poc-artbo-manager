@@ -26,7 +26,9 @@ type Props = {
   onAddFiles: () => void;
   onRemoveFile: (file: StoredFile) => void;
   /** Admin only: when set, each file shows approve/reject actions. */
-  onReviewFile?: (file: StoredFile, status: Exclude<FileStatus, "pending">) => void;
+  onReviewFile?: (file: StoredFile, status: Exclude<FileStatus, "pending">, comment?: string) => void;
+  /** Admin only: saves the comment left on a file. */
+  onCommentFile?: (file: StoredFile, comment: string) => void;
 };
 
 /** Right-side panel listing one folder's files (Paper "Sheet"). */
@@ -39,6 +41,7 @@ export function FolderSheet({
   onAddFiles,
   onRemoveFile,
   onReviewFile,
+  onCommentFile,
 }: Props) {
   const { askRemoval, dialog, open: confirming, close: closeConfirmation } = useFileRemovalDialog(onRemoveFile);
 
@@ -88,7 +91,7 @@ export function FolderSheet({
           ) : (
             <ul className="grid grid-cols-1 content-start gap-2.5">
               {files.map((file) => (
-                <FileThumb key={file.id} file={file} onRemove={askRemoval} onReview={onReviewFile} />
+                <FileThumb key={file.id} file={file} onRemove={askRemoval} onReview={onReviewFile} onComment={onCommentFile} />
               ))}
             </ul>
           )}
