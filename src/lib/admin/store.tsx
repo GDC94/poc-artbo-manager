@@ -10,8 +10,8 @@ import { adminReducer, initialAdminState, type AdminState } from "./state";
 import type { Participant, ParticipantInput, Requirement } from "./types";
 
 const PARTICIPANTS_KEY = "artbo:admin:participants:v1";
-const REQUIREMENTS_KEY = "artbo:admin:requirements:v1";
-const SELECTIONS_KEY = "artbo:admin:selections:v1";
+const REQUIREMENTS_KEY = "artbo:admin:requirements:v2";
+const SELECTIONS_KEY = "artbo:admin:selections:v2";
 
 const isArrayOf =
   <T,>(guard: (v: unknown) => v is T) =>
@@ -33,6 +33,7 @@ type Value = {
   updateParticipant: (id: string, input: ParticipantInput) => void;
   addRequirement: (name: string) => void;
   toggleRequirement: (id: string) => void;
+  removeRequirement: (id: string) => void;
   toggleSelection: (participantId: string, requirementId: string) => void;
 };
 
@@ -75,10 +76,11 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     [],
   );
   const addRequirement = useCallback(
-    (name: string) => dispatch({ type: "addRequirement", id: `req-${crypto.randomUUID().slice(0, 8)}`, name }),
+    (name: string) => dispatch({ type: "addRequirement", name }),
     [],
   );
   const toggleRequirement = useCallback((id: string) => dispatch({ type: "toggleRequirement", id }), []);
+  const removeRequirement = useCallback((id: string) => dispatch({ type: "removeRequirement", id }), []);
   const toggleSelection = useCallback(
     (participantId: string, requirementId: string) =>
       dispatch({ type: "toggleSelection", participantId, requirementId }),
@@ -95,9 +97,10 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       updateParticipant,
       addRequirement,
       toggleRequirement,
+      removeRequirement,
       toggleSelection,
     }),
-    [state, createParticipant, updateParticipant, addRequirement, toggleRequirement, toggleSelection],
+    [state, createParticipant, updateParticipant, addRequirement, toggleRequirement, removeRequirement, toggleSelection],
   );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }

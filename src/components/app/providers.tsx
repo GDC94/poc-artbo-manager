@@ -3,7 +3,6 @@
 import { ToastProvider } from "@/components/app/shared/ToastProvider";
 import { AdminProvider } from "@/lib/admin/store";
 import { BrandProvider } from "@/lib/brand/store";
-import { FilesProvider } from "@/lib/files/store";
 import { ProfileProvider } from "@/lib/profile/store";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -11,9 +10,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ToastProvider>
       <ProfileProvider>
         <BrandProvider>
-          <FilesProvider>
-            <AdminProvider>{children}</AdminProvider>
-          </FilesProvider>
+          <AdminProvider>{children}</AdminProvider>
         </BrandProvider>
       </ProfileProvider>
     </ToastProvider>

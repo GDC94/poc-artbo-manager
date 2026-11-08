@@ -34,12 +34,13 @@ export function RequirementsSelect({ participantId }: { participantId: string })
   return (
     <div className="w-full md:w-[220px]">
       <MultiSelect value={value} onValueChange={handleChange}>
-        {/* BeUI chips, kept on one line: chips shrink and truncate with "…"
-            instead of wrapping, so the table row keeps its height. */}
+        {/* BeUI chips, kept on one line: only the chips that fit show at full
+            width and a "+n" counter covers the rest, so the table row keeps its height. */}
         <MultiSelectTrigger singleLine className="min-h-9 min-w-0 py-1 text-[13px]">
           <MultiSelectValue
             placeholder={<span className="truncate whitespace-nowrap">Elige los requerimientos</span>}
             chipClassName="h-6 min-w-0"
+            collapseOverflow
           />
           <MultiSelectInput collapseWhenClosed aria-label="Buscar requerimientos" placeholder="" />
         </MultiSelectTrigger>

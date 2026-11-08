@@ -6,24 +6,27 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { summarizeFolder } from "@/lib/files/format";
-import { getFolderDef, type FolderKey } from "@/lib/files/folders";
-import type { StoredFile } from "@/lib/files/reducer";
+import type { FolderDef } from "@/lib/files/folders";
+import type { FileStatus, StoredFile } from "@/lib/files/reducer";
 import { cn } from "@/lib/utils";
 
 import { FileThumb } from "./FileThumb";
 import { ICON_TILE_CLASSNAME, ICON_TILE_FILLED_CLASSNAME } from "./FolderCard";
-import { FOLDER_ICONS } from "./folder-icons";
+import { FolderIcon } from "./FolderIcon";
+import { useFileRemovalDialog } from "./useFileRemovalDialog";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Last opened folder; kept after close so the content survives the slide-out. */
-  folder: FolderKey | null;
+  folder: FolderDef | null;
   files: StoredFile[];
   /** Where folder pages live; the participant side uses `/documentos`. */
   folderBasePath?: string;
   onAddFiles: () => void;
   onRemoveFile: (file: StoredFile) => void;
+  /** Admin only: when set, each file shows approve/reject actions. */
+  onReviewFile?: (file: StoredFile, status: Exclude<FileStatus, "pending">) => void;
 };
 
 /** Right-side panel listing one folder's files (Paper "Sheet"). */
@@ -35,25 +38,33 @@ export function FolderSheet({
   folderBasePath = "/documentos",
   onAddFiles,
   onRemoveFile,
+  onReviewFile,
 }: Props) {
-  const Icon = folder ? FOLDER_ICONS[folder] : null;
+  const { askRemoval, dialog, open: confirming, close: closeConfirmation } = useFileRemovalDialog(onRemoveFile);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
         hideClose
+        // Escape closes only the confirmation while it is open. preventDefault keeps the sheet open, but
+        // it also makes the modal's own Escape handler (use-focus-trap) skip the event, so close it here.
+        onEscapeKeyDown={(event) => {
+          if (!confirming) return;
+          event.preventDefault();
+          closeConfirmation();
+        }}
         closeLabel="Cerrar"
         overlayClassName="bg-black/55"
         className="flex w-[384px] max-w-full flex-col gap-0 border-l border-white/10 bg-[#131314] p-0 sm:max-w-none"
       >
         <div className="flex items-center gap-3.5 border-b border-white/[0.06] px-4 py-5 sm:px-6">
           <span className={cn(ICON_TILE_CLASSNAME, ICON_TILE_FILLED_CLASSNAME)}>
-            {Icon ? <Icon className="size-[17px]" strokeWidth={1.6} aria-hidden /> : null}
+            {folder ? <FolderIcon folderKey={folder.key} className="size-[17px]" strokeWidth={1.6} aria-hidden /> : null}
           </span>
           <div className="min-w-0 flex-1">
             <SheetTitle className="text-base font-normal text-white">
-              {folder ? getFolderDef(folder).label : null}
+              {folder ? folder.label : null}
             </SheetTitle>
             <SheetDescription className="text-[13px] tabular-nums text-white/55">
               {summarizeFolder(files)}
@@ -75,9 +86,9 @@ export function FolderSheet({
               Esta carpeta está vacía. Agrega archivos para verlos aquí.
             </p>
           ) : (
-            <ul className="grid grid-cols-3 content-start gap-x-3 gap-y-4">
+            <ul className="grid grid-cols-1 content-start gap-2.5">
               {files.map((file) => (
-                <FileThumb key={file.id} file={file} onRemove={onRemoveFile} />
+                <FileThumb key={file.id} file={file} onRemove={askRemoval} onReview={onReviewFile} />
               ))}
             </ul>
           )}
@@ -95,13 +106,15 @@ export function FolderSheet({
           </Button>
           {folder ? (
             <Link
-              href={`${folderBasePath}/${folder}`}
+              href={`${folderBasePath}/${folder.key}`}
               className="block py-2 text-center text-xs text-white/55 underline-offset-4 hover:text-white hover:underline"
             >
               Abrir la página de la carpeta
             </Link>
           ) : null}
         </div>
+        {/* Inside SheetContent: the modal Dialog's FocusScope would pull focus back from a portal outside it. */}
+        {dialog}
       </SheetContent>
     </Sheet>
   );

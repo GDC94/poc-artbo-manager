@@ -13,42 +13,62 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/app/shared/ToastProvider";
 import { useBrand } from "@/lib/brand/store";
 import { summarizeFolder } from "@/lib/files/format";
-import { FOLDER_DEFS, type FolderKey } from "@/lib/files/folders";
+import type { FolderDef, FolderKey } from "@/lib/files/folders";
+import { folderFiles } from "@/lib/files/reducer";
 import { useFiles } from "@/lib/files/store";
 import { cn } from "@/lib/utils";
 
 import { FolderCard } from "./FolderCard";
 import { FolderSheet } from "./FolderSheet";
-import { FOLDER_ICONS } from "./folder-icons";
+import { FolderIcon } from "./FolderIcon";
+import { useReview } from "./useReview";
 import { useUpload } from "./useUpload";
+
+export type EmptyFolders = { title: string; hint: string };
+
+const PARTICIPANT_EMPTY: EmptyFolders = {
+  title: "Todavía no tienes carpetas habilitadas",
+  hint: "Cuando el equipo de ARTBO habilite una, aparecerá aquí.",
+};
 
 type DraftProps = {
   initialName: string;
   initialDescription: string;
   folderBasePath: string;
+  folders: readonly FolderDef[];
+  empty: EmptyFolders;
+  reviewable: boolean;
 };
 
-function BrandFormFields({ initialName, initialDescription, folderBasePath }: DraftProps) {
+function BrandFormFields({
+  initialName,
+  initialDescription,
+  folderBasePath,
+  folders,
+  empty,
+  reviewable,
+}: DraftProps) {
   const { saveBrand } = useBrand();
   const { state, removeFile } = useFiles();
   const { toast } = useToast();
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
-  const [sheetFolder, setSheetFolder] = useState<FolderKey | null>(null);
+  const [sheetFolder, setSheetFolder] = useState<FolderDef | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const triggerRef = useRef<HTMLElement | null>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
-  const pickerTarget = useRef<FolderKey>("imagenes");
+  const pickerTarget = useRef<FolderKey | null>(null);
   const upload = useUpload();
+  const review = useReview();
 
   const openPicker = (folder: FolderKey) => {
     pickerTarget.current = folder;
     pickerRef.current?.click();
   };
 
-  const sheetFiles = sheetFolder ? state.folders[sheetFolder] : [];
+  const sheetFiles = sheetFolder ? folderFiles(state, sheetFolder.key) : [];
 
-  const openSheet = (folder: FolderKey, card: HTMLElement) => {
+  const openSheet = (folder: FolderDef, card: HTMLElement) => {
     triggerRef.current = card;
     setSheetFolder(folder);
     setSheetOpen(true);
@@ -94,12 +114,17 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
 
       <div className="space-y-2 pt-3">
         <Label className="text-sm font-semibold text-white">Assets de tu marca</Label>
+        {folders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 px-5 py-8 text-center">
+            <p className="text-sm font-medium text-white">{empty.title}</p>
+            <p className="mt-1 text-xs text-zinc-400">{empty.hint}</p>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))]">
-          {FOLDER_DEFS.map((def) => {
-            const files = state.folders[def.key];
+          {folders.map((def) => {
+            const files = folderFiles(state, def.key);
             const filled = files.length > 0;
-            const isOpen = sheetOpen && sheetFolder === def.key;
-            const Icon = FOLDER_ICONS[def.key];
+            const isOpen = sheetOpen && sheetFolder?.key === def.key;
             const status = summarizeFolder(files);
 
             const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -107,7 +132,7 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
               if (e.target !== e.currentTarget) return;
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                openSheet(def.key, e.currentTarget);
+                openSheet(def, e.currentTarget);
               }
             };
 
@@ -124,9 +149,9 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
                   filled && "[--folder-fill:#18181b]",
                   isOpen && "[--folder-fill:#232326] [--folder-stroke:rgba(0,113,227,0.7)]",
                 )}
-                onClick={(e) => openSheet(def.key, e.currentTarget)}
+                onClick={(e) => openSheet(def, e.currentTarget)}
                 onKeyDown={onKeyDown}
-                icon={<Icon className="size-[17px]" strokeWidth={1.6} aria-hidden />}
+                icon={<FolderIcon folderKey={def.key} className="size-[17px]" strokeWidth={1.6} aria-hidden />}
                 action={
                   <button
                     type="button"
@@ -162,7 +187,7 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           event.target.value = "";
-          upload(pickerTarget.current, files);
+          if (pickerTarget.current) upload(pickerTarget.current, files);
         }}
       />
 
@@ -176,11 +201,18 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
         files={sheetFiles}
         folderBasePath={folderBasePath}
         onAddFiles={() => {
-          if (sheetFolder) openPicker(sheetFolder);
+          if (sheetFolder) openPicker(sheetFolder.key);
         }}
         onRemoveFile={(file) => {
-          if (sheetFolder) removeFile(sheetFolder, file.id);
+          if (sheetFolder) removeFile(sheetFolder.key, file.id);
         }}
+        onReviewFile={
+          reviewable
+            ? (file, status) => {
+                if (sheetFolder) review(sheetFolder.key, file, status);
+              }
+            : undefined
+        }
       />
 
       <div className="pt-6">
@@ -199,7 +231,18 @@ function BrandFormFields({ initialName, initialDescription, folderBasePath }: Dr
 }
 
 /** Brand card. Seeds its draft once the stored brand has been read (see `key`). */
-export function BrandForm({ folderBasePath = "/documentos" }: { folderBasePath?: string }) {
+export function BrandForm({
+  folderBasePath = "/documentos",
+  folders,
+  empty = PARTICIPANT_EMPTY,
+  reviewable = false,
+}: {
+  folderBasePath?: string;
+  folders: readonly FolderDef[];
+  empty?: EmptyFolders;
+  /** Admin only: show the approve/reject actions on files. */
+  reviewable?: boolean;
+}) {
   const { brand, ready } = useBrand();
   return (
     <BrandFormFields
@@ -207,6 +250,9 @@ export function BrandForm({ folderBasePath = "/documentos" }: { folderBasePath?:
       initialName={brand.name}
       initialDescription={brand.description}
       folderBasePath={folderBasePath}
+      folders={folders}
+      empty={empty}
+      reviewable={reviewable}
     />
   );
 }

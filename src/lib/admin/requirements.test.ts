@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   addRequirement,
   activeIds,
+  slugifyRequirement,
+  visibleFoldersFor,
   toggleRequirementActive,
   toggleSelection,
   validateRequirementName,
@@ -30,12 +32,12 @@ describe("validateRequirementName", () => {
 
 describe("addRequirement", () => {
   it("appends an active, trimmed requirement", () => {
-    const res = addRequirement(catalog, "  Contratos ", "r3");
+    const res = addRequirement(catalog, "  Contratos ");
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.catalog.at(-1)).toEqual({ id: "r3", label: "Contratos", active: true });
+    if (res.ok) expect(res.catalog.at(-1)).toEqual({ id: "contratos", label: "Contratos", active: true });
   });
   it("returns the error instead of appending an invalid name", () => {
-    const res = addRequirement(catalog, "planos stand", "r3");
+    const res = addRequirement(catalog, "planos stand");
     expect(res.ok).toBe(false);
   });
 });
@@ -59,5 +61,49 @@ describe("toggleSelection", () => {
 describe("activeIds", () => {
   it("lists only active requirement ids", () => {
     expect(activeIds(catalog)).toEqual(["r1"]);
+  });
+});
+
+describe("slugifyRequirement", () => {
+  it("lowercases, strips accents and hyphenates", () => {
+    expect(slugifyRequirement("Guías de Marca", [])).toBe("guias-de-marca");
+    expect(slugifyRequirement("  Planos & Stand! ", [])).toBe("planos-stand");
+    expect(slugifyRequirement("Año 2026", [])).toBe("ano-2026");
+  });
+  it("appends -2, -3 on collision", () => {
+    expect(slugifyRequirement("Logos", ["logos"])).toBe("logos-2");
+    expect(slugifyRequirement("Logos", ["logos", "logos-2"])).toBe("logos-3");
+  });
+  it("falls back to a non-empty slug", () => {
+    expect(slugifyRequirement("!!!", [])).toBe("requerimiento");
+    expect(slugifyRequirement("???", ["requerimiento"])).toBe("requerimiento-2");
+  });
+});
+
+describe("addRequirement id", () => {
+  it("derives a unique slug id from the name", () => {
+    const base: Requirement[] = [{ id: "contratos", label: "Otro", active: true }];
+    const res = addRequirement(base, "Contratos");
+    expect(res.ok && res.catalog.at(-1)?.id).toBe("contratos-2");
+  });
+});
+
+describe("visibleFoldersFor", () => {
+  const reqs: Requirement[] = [
+    { id: "a", label: "Alfa", active: true },
+    { id: "b", label: "Beta", active: false },
+    { id: "c", label: "Gamma", active: true },
+  ];
+  it("keeps active + selected requirements in catalog order", () => {
+    expect(visibleFoldersFor("p", reqs, { p: ["c", "a", "b"] })).toEqual([
+      { key: "a", label: "Alfa" },
+      { key: "c", label: "Gamma" },
+    ]);
+  });
+  it("hides inactive requirements even if selected", () => {
+    expect(visibleFoldersFor("p", reqs, { p: ["b"] })).toEqual([]);
+  });
+  it("is empty for an unknown participant", () => {
+    expect(visibleFoldersFor("nobody", reqs, { p: ["a"] })).toEqual([]);
   });
 });

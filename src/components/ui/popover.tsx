@@ -10,7 +10,7 @@ type Props = {
   trigger: ReactElement<Record<string, unknown>>;
   children: ReactNode;
   open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, details: { event: Event }) => void;
   align?: "start" | "center" | "end";
   className?: string;
 };

@@ -1,4 +1,7 @@
-/** The brand asset folders. `key` doubles as the `/documentos/[folder]` route segment. */
+/**
+ * Seed folders. They are the initial requirement catalog (see `SEED_REQUIREMENTS`); the live
+ * folder list is derived from the catalog, so new requirements add folders at runtime.
+ */
 export const FOLDER_DEFS = [
   { key: "imagenes", label: "Imágenes" },
   { key: "iconos", label: "Íconos" },
@@ -9,14 +12,14 @@ export const FOLDER_DEFS = [
   { key: "plantillas", label: "Plantillas" },
 ] as const;
 
-export type FolderKey = (typeof FOLDER_DEFS)[number]["key"];
+/** A folder key is the requirement id and doubles as the `/documentos/[folder]` route segment. */
+export type FolderKey = string;
 
-export const FOLDER_KEYS = FOLDER_DEFS.map((f) => f.key) as readonly FolderKey[];
+export type FolderDef = { key: FolderKey; label: string };
 
-export function isFolderKey(value: string): value is FolderKey {
-  return (FOLDER_KEYS as readonly string[]).includes(value);
-}
+export const SEED_FOLDER_KEYS: readonly FolderKey[] = FOLDER_DEFS.map((f) => f.key);
 
-export function getFolderDef(key: FolderKey) {
-  return FOLDER_DEFS.find((f) => f.key === key)!;
+/** Safe lookup: a stale or unknown key yields `undefined` instead of throwing. */
+export function findFolder(folders: readonly FolderDef[], key: FolderKey): FolderDef | undefined {
+  return folders.find((f) => f.key === key);
 }

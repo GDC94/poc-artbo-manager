@@ -9,16 +9,21 @@ import { Breadcrumb } from "@/components/app/shared/Breadcrumb";
 import { useAdmin } from "@/lib/admin/store";
 import { BrandProvider } from "@/lib/brand/store";
 import { FilesProvider } from "@/lib/files/store";
-import { getFolderDef, type FolderKey } from "@/lib/files/folders";
+import { foldersFromRequirements } from "@/lib/admin/requirements";
+import { findFolder, type FolderKey } from "@/lib/files/folders";
+import { FolderNotFound } from "@/components/app/documents/FolderNotFound";
 
 /** Folder dropzone page of one participant. */
 export function ParticipantFolder({ id, folder }: { id: string; folder: FolderKey }) {
-  const { participants, ready } = useAdmin();
+  const { participants, requirements, ready } = useAdmin();
   const participant = participants.find((p) => p.id === id);
   const institution = participant?.institution ?? "";
   const defaultBrand = useMemo(() => ({ name: institution, description: "" }), [institution]);
 
   if (!participant) return ready ? <ParticipantNotFound /> : null;
+  // The admin reaches every catalog folder (active or not); anything else is not found.
+  const folderDef = findFolder(foldersFromRequirements(requirements), folder);
+  if (!folderDef) return ready ? <FolderNotFound backHref={`/admin/participantes/${id}?tab=documentos`} /> : null;
   const detailHref = `/admin/participantes/${id}`;
 
   return (
@@ -31,14 +36,14 @@ export function ParticipantFolder({ id, folder }: { id: string; folder: FolderKe
             items={[
               { label: "Participantes", href: "/admin" },
               { label: participant.fullName, href: `${detailHref}?tab=documentos` },
-              { label: getFolderDef(folder).label },
+              { label: folderDef.label },
             ]}
           />
         }
       />
       <BrandProvider key={id} ownerId={id} defaultBrand={defaultBrand}>
-        <FilesProvider key={id} ownerId={id}>
-          <FolderWorkspace folder={folder} backHref={`${detailHref}?tab=documentos`} />
+        <FilesProvider key={id} ownerId={id} initialFileStatus="approved">
+          <FolderWorkspace folder={folderDef} reviewable backHref={`${detailHref}?tab=documentos`} />
         </FilesProvider>
       </BrandProvider>
     </>

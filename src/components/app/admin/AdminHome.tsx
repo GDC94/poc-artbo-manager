@@ -10,14 +10,31 @@ import { Button } from "@/components/ui/button";
 import { filterParticipants } from "@/lib/admin/participants";
 import { useAdmin } from "@/lib/admin/store";
 import { NO_FILTERS, type ParticipantFilters } from "@/lib/admin/types";
+import { usePendingCounts } from "@/lib/files/usePendingCounts";
 
 const COLUMNS = ["Nombre", "Tipo de participante", "Evento", "Requerimientos"] as const;
+
+/** "N pendientes" link to the participant's documents; nothing while loading or when zero. */
+function PendingLink({ id, fullName, count }: { id: string; fullName: string; count: number | undefined }) {
+  if (!count) return null;
+  const label = `${count} ${count === 1 ? "pendiente" : "pendientes"}`;
+  return (
+    <Link
+      href={`/admin/participantes/${id}?tab=documentos`}
+      aria-label={`${label} de ${fullName}`}
+      className="mt-1 inline-block rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[11px] font-medium leading-4 text-amber-200 hover:border-amber-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]"
+    >
+      {label}
+    </Link>
+  );
+}
 
 /** Admin home (Paper E0-0): filterable participants table. */
 export function AdminHome() {
   const { participants } = useAdmin();
   const [filters, setFilters] = useState<ParticipantFilters>(NO_FILTERS);
   const rows = useMemo(() => filterParticipants(participants, filters), [participants, filters]);
+  const pending = usePendingCounts(useMemo(() => participants.map((p) => p.id), [participants]));
 
   return (
     <section aria-labelledby="participantes" className="pt-6 lg:pt-[33px]">
@@ -39,6 +56,7 @@ export function AdminHome() {
           {rows.map((participant) => (
             <li key={participant.id} className="rounded-xl border border-white/10 bg-[#0f0f10] p-4">
               <p className="break-words text-base font-medium text-white">{participant.fullName}</p>
+              <PendingLink id={participant.id} fullName={participant.fullName} count={pending?.[participant.id]} />
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
                 <div className="min-w-0">
                   <dt className="text-xs font-bold text-white/55">{COLUMNS[1]}</dt>
@@ -93,7 +111,8 @@ export function AdminHome() {
             {rows.map((participant) => (
               <tr key={participant.id} className="border-b border-white/10 transition-colors hover:bg-white/[0.03]">
                 <th scope="row" className="truncate px-3 py-3 text-sm font-normal" title={participant.fullName}>
-                  {participant.fullName}
+                  <span className="block truncate">{participant.fullName}</span>
+                  <PendingLink id={participant.id} fullName={participant.fullName} count={pending?.[participant.id]} />
                 </th>
                 <td className="truncate px-3 py-3">{participant.type}</td>
                 <td className="truncate px-3 py-3">{participant.event}</td>

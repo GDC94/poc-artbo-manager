@@ -1,29 +1,32 @@
-import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-import { FolderWorkspace } from "@/components/app/documents/FolderWorkspace";
-import { PageGreeting } from "@/components/app/layouts/PageGreeting";
-import { FOLDER_KEYS, getFolderDef, isFolderKey } from "@/lib/files/folders";
+import { ParticipantFolderPage } from "@/components/app/documents/ParticipantFolderPage";
+import { FOLDER_DEFS, SEED_FOLDER_KEYS } from "@/lib/files/folders";
 
-/** All params are prerendered by `generateStaticParams`; opt out of the dev-only instant-shell check. */
+/** Folders live in client-side data, so the page resolves them after hydration; opt out of the dev-only instant-shell check. */
 export const instant = false;
 
+/** Cache Components needs at least one sample param; any other slug renders on first request. */
 export function generateStaticParams() {
-  return FOLDER_KEYS.map((folder) => ({ folder }));
+  return SEED_FOLDER_KEYS.map((folder) => ({ folder }));
 }
 
+/** Labels of new folders only exist client-side, so unknown slugs get the generic title. */
 export async function generateMetadata({ params }: PageProps<"/documentos/[folder]">) {
   const { folder } = await params;
-  return { title: isFolderKey(folder) ? `${getFolderDef(folder).label} · ARTBO` : "ARTBO" };
+  const known = FOLDER_DEFS.find((f) => f.key === folder);
+  return { title: known ? `${known.label} · ARTBO` : "Carpeta · ARTBO" };
 }
 
-export default async function FolderPage({ params }: PageProps<"/documentos/[folder]">) {
+async function Folder({ params }: Pick<PageProps<"/documentos/[folder]">, "params">) {
   const { folder } = await params;
-  if (!isFolderKey(folder)) notFound();
+  return <ParticipantFolderPage folder={folder} />;
+}
 
+export default function FolderPage({ params }: PageProps<"/documentos/[folder]">) {
   return (
-    <>
-      <PageGreeting subtitle="¿Tienes alguna idea para hoy?" />
-      <FolderWorkspace folder={folder} />
-    </>
+    <Suspense fallback={null}>
+      <Folder params={params} />
+    </Suspense>
   );
 }

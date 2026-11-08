@@ -1,7 +1,12 @@
 import { SEED_PARTICIPANTS, SEED_REQUIREMENTS, SEED_SELECTIONS } from "@/lib/mock/participants";
 
 import { buildParticipant } from "./participants";
-import { addRequirement, toggleRequirementActive, toggleSelection } from "./requirements";
+import {
+  addRequirement,
+  removeRequirementFromSelections,
+  toggleRequirementActive,
+  toggleSelection,
+} from "./requirements";
 import type { Participant, ParticipantInput, Requirement } from "./types";
 
 export type AdminState = {
@@ -17,8 +22,9 @@ export type AdminAction =
   | { type: "hydrate"; data: Partial<Pick<AdminState, "participants" | "requirements" | "selections">> }
   | { type: "createParticipant"; id: string; input: ParticipantInput }
   | { type: "updateParticipant"; id: string; input: ParticipantInput }
-  | { type: "addRequirement"; id: string; name: string }
+  | { type: "addRequirement"; name: string }
   | { type: "toggleRequirement"; id: string }
+  | { type: "removeRequirement"; id: string }
   | { type: "toggleSelection"; participantId: string; requirementId: string };
 
 export function initialAdminState(): AdminState {
@@ -46,11 +52,19 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       };
     }
     case "addRequirement": {
-      const result = addRequirement(state.requirements, action.name, action.id);
+      const result = addRequirement(state.requirements, action.name);
       return result.ok ? { ...state, requirements: result.catalog } : state;
     }
     case "toggleRequirement":
       return { ...state, requirements: toggleRequirementActive(state.requirements, action.id) };
+    case "removeRequirement": {
+      if (!state.requirements.some((r) => r.id === action.id)) return state;
+      return {
+        ...state,
+        requirements: state.requirements.filter((r) => r.id !== action.id),
+        selections: removeRequirementFromSelections(state.selections, action.id),
+      };
+    }
     case "toggleSelection":
       return {
         ...state,

@@ -1,4 +1,6 @@
 export type MockUser = {
+  /** Seeded participant this viewer is (there is no auth); drives which folders are visible. */
+  participantId: string;
   firstName: string;
   lastName: string;
   phone: string;
@@ -9,6 +11,7 @@ export type MockUser = {
 
 /** Fake participant. Nothing here is real. */
 export const MOCK_USER: MockUser = {
+  participantId: "p-01",
   firstName: "Sebastián",
   lastName: "Ramírez",
   phone: "57 300 123 4567",

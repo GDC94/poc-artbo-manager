@@ -1,4 +1,5 @@
 import type { Participant, Requirement } from "@/lib/admin/types";
+import { FOLDER_DEFS } from "@/lib/files/folders";
 
 /** Fictional participants. Names, emails (.test) and phones are made up. */
 export const SEED_PARTICIPANTS: Participant[] = [
@@ -18,16 +19,16 @@ export const SEED_PARTICIPANTS: Participant[] = [
   { id: "p-14", fullName: "Gabriela Londoño Pardo", type: "Editorial", event: "ARTBO Feria", email: "gabriela@libros-aire.test", institution: "Libros al Aire", phone: "57 321 555 0114", city: "Cali", country: "Colombia" },
 ];
 
-/** Starting catalog (Paper's duplicated "Documentos" entry is collapsed to one). */
-export const SEED_REQUIREMENTS: Requirement[] = [
-  { id: "req-planos", label: "Planos Stand", active: true },
-  { id: "req-imagenes", label: "Imágenes", active: true },
-  { id: "req-documentos", label: "Documentos", active: true },
-];
+/** Starting catalog: one requirement per seed folder, id == folder key. */
+export const SEED_REQUIREMENTS: Requirement[] = FOLDER_DEFS.map(({ key, label }) => ({
+  id: key,
+  label,
+  active: true,
+}));
 
 export const SEED_SELECTIONS: Record<string, string[]> = {
-  "p-01": ["req-planos", "req-imagenes"],
-  "p-03": ["req-documentos"],
-  "p-04": ["req-imagenes", "req-documentos"],
-  "p-10": ["req-planos"],
+  "p-01": ["imagenes", "logos", "guias-de-marca"],
+  "p-03": ["ilustraciones", "tipografias"],
+  "p-04": ["imagenes", "plantillas"],
+  "p-10": ["logos", "iconos"],
 };

@@ -104,6 +104,7 @@ function ChangeDialog({
         viewId={open ? `change-${fieldType}` : null}
         onClose={close}
         placement="center"
+        portal
         ariaLabel={title}
         className="max-w-[400px] border-white/10 bg-[#161617]"
       >

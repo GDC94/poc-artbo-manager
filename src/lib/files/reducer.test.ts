@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { MAX_FILE_BYTES } from "./constants";
-import { createEntries, emptyState, filesReducer, type StoredFile } from "./reducer";
+import {
+  countPending,
+  createEntries,
+  emptyState,
+  filesReducer,
+  folderFiles,
+  type StoredFile,
+} from "./reducer";
 
 const entry = (id: string, size = 10): StoredFile => ({
   id,
@@ -9,18 +16,32 @@ const entry = (id: string, size = 10): StoredFile => ({
   type: "image/png",
   addedAt: 1,
   blob: new Blob(["x"]),
+  status: "pending",
 });
 
 describe("filesReducer", () => {
-  it("starts empty for every folder", () => {
-    expect(emptyState().folders.imagenes).toEqual([]);
-    expect(emptyState().folders.plantillas).toEqual([]);
+  it("starts with no files in any folder", () => {
+    expect(folderFiles(emptyState(), "imagenes")).toEqual([]);
+    expect(folderFiles(emptyState(), "plantillas")).toEqual([]);
+  });
+
+  it("treats a folder absent from the map as empty and lets it receive files", () => {
+    const state = emptyState();
+    expect(folderFiles(state, "contratos")).toEqual([]);
+    const added = filesReducer(state, { type: "add", folder: "contratos", entries: [entry("a")] });
+    expect(folderFiles(added, "contratos").map((f) => f.id)).toEqual(["a"]);
+    expect(filesReducer(state, { type: "remove", folder: "nada", id: "x" })).toBe(state);
+  });
+
+  it("keeps stored files for folders it does not know on hydrate", () => {
+    const next = filesReducer(emptyState(), { type: "hydrate", folders: { viejo: [entry("a")] } });
+    expect(folderFiles(next, "viejo")).toHaveLength(1);
   });
 
   it("adds entries to a folder without touching others", () => {
     const next = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
     expect(next.folders.logos.map((f) => f.id)).toEqual(["a"]);
-    expect(next.folders.imagenes).toEqual([]);
+    expect(folderFiles(next, "imagenes")).toEqual([]);
   });
 
   it("puts the newest entries first", () => {
@@ -59,7 +80,7 @@ describe("filesReducer", () => {
       folders: { iconos: [entry("i")] },
     });
     expect(next.folders.iconos.map((f) => f.id)).toEqual(["i"]);
-    expect(next.folders.logos).toEqual([]);
+    expect(folderFiles(next, "logos")).toEqual([]);
     expect(next.hydrated).toBe(true);
   });
 });
@@ -82,5 +103,77 @@ describe("createEntries", () => {
     const f = new File(["abc"], "a.bin");
     const { accepted } = createEntries([f], { makeId: () => "x", now: () => 0 });
     expect(accepted[0].type).toBe("application/octet-stream");
+  });
+});
+
+describe("file review status", () => {
+  const legacy = (id: string) => {
+    const withoutStatus: Partial<StoredFile> = entry(id);
+    delete withoutStatus.status;
+    return withoutStatus as StoredFile;
+  };
+
+  it("hydrates stored files without a status as pending", () => {
+    const next = filesReducer(emptyState(), { type: "hydrate", folders: { logos: [legacy("a")] } });
+    expect(next.folders.logos[0].status).toBe("pending");
+  });
+
+  it("keeps a stored decision on hydrate", () => {
+    const next = filesReducer(emptyState(), {
+      type: "hydrate",
+      folders: { logos: [{ ...entry("a"), status: "approved" }] },
+    });
+    expect(next.folders.logos[0].status).toBe("approved");
+  });
+
+  it("sets the status of one file", () => {
+    let state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a"), entry("b")] });
+    state = filesReducer(state, { type: "setStatus", folder: "logos", id: "a", status: "rejected" });
+    expect(Object.fromEntries(state.folders.logos.map((f) => [f.id, f.status]))).toEqual({
+      a: "rejected",
+      b: "pending",
+    });
+  });
+
+  it("ignores a status change for an unknown id or folder", () => {
+    const state = filesReducer(emptyState(), { type: "add", folder: "logos", entries: [entry("a")] });
+    expect(filesReducer(state, { type: "setStatus", folder: "logos", id: "zzz", status: "approved" })).toBe(state);
+    expect(filesReducer(state, { type: "setStatus", folder: "nada", id: "a", status: "approved" })).toBe(state);
+  });
+
+  it("stamps new entries with the given status", () => {
+    const file = new File(["x"], "a.png", { type: "image/png" });
+    const deps = { makeId: () => "id", now: () => 1 };
+    expect(createEntries([file], { ...deps, status: "approved" }).accepted[0].status).toBe("approved");
+    expect(createEntries([file], deps).accepted[0].status).toBe("pending");
+  });
+
+  it("counts pending files across every folder", () => {
+    const folders = {
+      logos: [entry("a"), { ...entry("b"), status: "approved" as const }],
+      oculta: [entry("c"), legacy("d"), { ...entry("e"), status: "rejected" as const }],
+    };
+    expect(countPending({ folders })).toBe(3);
+    expect(countPending(emptyState())).toBe(0);
+  });
+
+  it("refresh replaces the files but keeps the write counter, and is a no-op when nothing changed", () => {
+    const base = filesReducer(emptyState(), { type: "hydrate", folders: { logos: [entry("a")] } });
+    const same = filesReducer(base, { type: "refresh", folders: { logos: [entry("a")] } });
+    expect(same).toBe(base);
+    const changed = filesReducer(base, {
+      type: "refresh",
+      folders: { logos: [{ ...entry("a"), status: "approved" }] },
+    });
+    expect(changed.folders.logos[0].status).toBe("approved");
+    expect(changed.revision).toBe(base.revision);
+  });
+
+  it("bumps the revision only on user edits", () => {
+    const hydrated = filesReducer(emptyState(), { type: "hydrate", folders: {} });
+    const added = filesReducer(hydrated, { type: "add", folder: "logos", entries: [entry("a")] });
+    expect(added.revision).toBe(hydrated.revision + 1);
+    const decided = filesReducer(added, { type: "setStatus", folder: "logos", id: "a", status: "approved" });
+    expect(decided.revision).toBe(added.revision + 1);
   });
 });

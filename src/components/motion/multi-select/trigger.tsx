@@ -3,15 +3,30 @@
 
 import { ChevronsUpDown, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import type {
-  InputHTMLAttributes,
-  KeyboardEvent as ReactKeyboardEvent,
-  ReactNode,
-  Ref,
+import {
+  type InputHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type Ref,
+  useLayoutEffect,
+  useRef,
+  useState,
 } from "react";
 import { EASE_OUT, SPRING_LAYOUT, SPRING_SWAP } from "@/lib/ease";
 import { cn } from "@/lib/utils";
 import { mergeRefs, useMultiSelectContext } from "./context";
+import { visibleChipCount } from "./overflow";
+
+/** Flex gap between chips (`gap-1.5`). */
+const CHIP_GAP = 6;
+/** Row space kept free for the input: one gap while collapsed, `min-w-20` + gap while open. */
+const INPUT_RESERVE_CLOSED = CHIP_GAP;
+const INPUT_RESERVE_OPEN = 80 + CHIP_GAP;
+
+const CHIP_BASE =
+  "inline-flex h-7 items-center gap-1 rounded-lg bg-muted px-2 text-xs font-medium text-foreground";
+const COUNTER_BASE =
+  "inline-flex h-6 shrink-0 items-center rounded-lg bg-muted px-2 text-xs font-medium text-muted-foreground";
 
 export interface MultiSelectTriggerProps {
   children: ReactNode;
@@ -74,6 +89,11 @@ export interface MultiSelectValueProps {
   children?: (value: string, label: string) => ReactNode;
   className?: string;
   chipClassName?: string;
+  /**
+   * Local addition: show only the chips that fit at full width and a "+n"
+   * counter for the rest, instead of shrinking every chip.
+   */
+  collapseOverflow?: boolean;
 }
 
 export function MultiSelectValue({
@@ -81,19 +101,84 @@ export function MultiSelectValue({
   children,
   className,
   chipClassName,
+  collapseOverflow = false,
 }: MultiSelectValueProps) {
   const context = useMultiSelectContext("MultiSelectValue");
   const showPlaceholder = context.values.length === 0 && !context.open;
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  // Starts at 0 so chips that turn out not to fit never mount (and never play an exit);
+  // the layout effect below measures and sets the real count before first paint.
+  const [visibleCount, setVisibleCount] = useState(collapseOverflow ? 0 : context.values.length);
+  const { open } = context;
+  const valueCount = context.values.length;
+
+  useLayoutEffect(() => {
+    if (!collapseOverflow) return;
+    const row = wrapperRef.current?.parentElement;
+    const layer = measureRef.current;
+    if (!row || !layer) return;
+
+    const measure = () => {
+      const nodes = Array.from(layer.children) as HTMLElement[];
+      const counter = nodes.pop();
+      const next = visibleChipCount({
+        widths: nodes.map((node) => node.getBoundingClientRect().width),
+        available:
+          row.clientWidth - (open ? INPUT_RESERVE_OPEN : INPUT_RESERVE_CLOSED),
+        gap: CHIP_GAP,
+        counterWidth: counter?.getBoundingClientRect().width ?? 0,
+      });
+      setVisibleCount((current) => (current === next ? current : next));
+    };
+
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    observer.observe(layer);
+    return () => observer.disconnect();
+  }, [collapseOverflow, open, valueCount, chipClassName, context.values]);
+
+  const shownValues = collapseOverflow
+    ? context.values.slice(0, visibleCount)
+    : context.values;
+  const hiddenLabels = collapseOverflow
+    ? context.values.slice(visibleCount).map((value) => context.labelFor(value))
+    : [];
 
   return (
-    <div className={cn("contents", className)}>
+    <div ref={wrapperRef} className={cn("contents", className)}>
+      {collapseOverflow ? (
+        // Zero-size clip box so the wide, invisible measuring row never adds scroll width.
+        <div
+          aria-hidden="true"
+          inert
+          className="pointer-events-none invisible absolute top-0 left-0 size-0 overflow-hidden"
+        >
+          <div ref={measureRef} className="flex w-max items-center gap-1.5">
+            {context.values.map((value) => (
+              <span
+                key={value}
+                className={cn(CHIP_BASE, "shrink-0 whitespace-nowrap", chipClassName)}
+              >
+                <span>{children ? children(value, context.labelFor(value)) : context.labelFor(value)}</span>
+                <span className="-mr-1 size-5 shrink-0" />
+              </span>
+            ))}
+            <span data-measure-counter="" className={cn(COUNTER_BASE, chipClassName)}>
+              +{context.values.length}
+            </span>
+          </div>
+        </div>
+      ) : null}
       <AnimatePresence initial={false} mode="popLayout">
         {showPlaceholder ? (
           <span key="multi-select-placeholder" className="text-muted-foreground">
             {placeholder}
           </span>
         ) : null}
-        {context.values.map((value) => {
+        {shownValues.map((value) => {
           const label = context.labelFor(value);
           return (
             <motion.span
@@ -137,10 +222,7 @@ export function MultiSelectValue({
                       transform: SPRING_SWAP,
                     }
               }
-              className={cn(
-                "inline-flex h-7 max-w-full items-center gap-1 rounded-lg bg-muted px-2 text-xs font-medium text-foreground",
-                chipClassName,
-              )}
+              className={cn(CHIP_BASE, "max-w-full", chipClassName)}
             >
               <span className="truncate">
                 {children ? children(value, label) : label}
@@ -164,6 +246,15 @@ export function MultiSelectValue({
           );
         })}
       </AnimatePresence>
+      {hiddenLabels.length > 0 ? (
+        <span
+          title={hiddenLabels.join(", ")}
+          aria-label={`${hiddenLabels.length} más: ${hiddenLabels.join(", ")}`}
+          className={cn(COUNTER_BASE, chipClassName)}
+        >
+          +{hiddenLabels.length}
+        </span>
+      ) : null}
     </div>
   );
 }

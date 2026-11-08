@@ -13,7 +13,9 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import { EASE_OUT, SPRING_PANEL } from "@/lib/ease";
 import { focusablesIn, useFocusTrap } from "@/lib/hooks/use-focus-trap";
 import { PresenceGate } from "@/lib/presence-gate";
@@ -32,7 +34,15 @@ export interface MorphingModalProps {
    */
   ariaLabel?: string;
   className?: string;
+  /**
+   * Local addition: render under <body>, so the fixed chrome escapes the stacking
+   * context of the page layout. Leave off inside a modal Radix surface, whose
+   * focus trap only allows focus within its own DOM.
+   */
+  portal?: boolean;
 }
+
+const subscribeNoop = () => () => {};
 
 export function MorphingModal({
   viewId,
@@ -41,7 +51,9 @@ export function MorphingModal({
   placement = "bottom",
   ariaLabel,
   className,
+  portal = false,
 }: MorphingModalProps) {
+  const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const open = viewId !== null;
   const reduce = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -101,7 +113,7 @@ export function MorphingModal({
   // off `PresenceGate`, so interaction releases in the same commit that starts
   // the exit rather than when it ends — `open` is already false for those
   // frames.
-  return (
+  const content = (
     <AnimatePresence initial={false}>
       {open ? (
         <PresenceGate key="backdrop">
@@ -230,4 +242,7 @@ export function MorphingModal({
       ) : null}
     </AnimatePresence>
   );
+
+  if (!portal) return content;
+  return isClient ? createPortal(content, document.body) : null;
 }
