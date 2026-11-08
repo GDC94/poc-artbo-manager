@@ -20,7 +20,7 @@ export function ParticipantDocuments({ participant }: { participant: Participant
 
   return (
     <BrandProvider key={participant.id} ownerId={participant.id} defaultBrand={defaultBrand}>
-      <FilesProvider key={participant.id} ownerId={participant.id} initialFileStatus="approved">
+      <FilesProvider key={participant.id} ownerId={participant.id} initialFileStatus="approved" uploadedBy="admin">
         <h2 className="mb-5 text-2xl sm:text-3xl lg:mb-[27px] font-medium text-white">Cuéntanos sobre tu marca</h2>
         <BrandForm
           folders={folders}

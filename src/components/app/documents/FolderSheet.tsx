@@ -29,6 +29,10 @@ type Props = {
   onReviewFile?: (file: StoredFile, status: Exclude<FileStatus, "pending">, comment?: string) => void;
   /** Admin only: saves the comment left on a file. */
   onCommentFile?: (file: StoredFile, comment: string) => void;
+  /** Admin only: answers a participant's deletion request. */
+  onResolveDeletion?: (file: StoredFile, approved: boolean) => void;
+  /** Participant only: asks the admin to delete an approved file. */
+  onRequestDeletion?: (file: StoredFile) => void;
 };
 
 /** Right-side panel listing one folder's files (Paper "Sheet"). */
@@ -42,8 +46,12 @@ export function FolderSheet({
   onRemoveFile,
   onReviewFile,
   onCommentFile,
+  onResolveDeletion,
+  onRequestDeletion,
 }: Props) {
-  const { askRemoval, dialog, open: confirming, close: closeConfirmation } = useFileRemovalDialog(onRemoveFile);
+  const { askRemoval, dialog, open: confirming, close: closeConfirmation } = useFileRemovalDialog(onRemoveFile, {
+    onRequest: onReviewFile ? undefined : onRequestDeletion,
+  });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -91,7 +99,14 @@ export function FolderSheet({
           ) : (
             <ul className="grid grid-cols-1 content-start gap-2.5">
               {files.map((file) => (
-                <FileThumb key={file.id} file={file} onRemove={askRemoval} onReview={onReviewFile} onComment={onCommentFile} />
+                <FileThumb
+                  key={file.id}
+                  file={file}
+                  onRemove={askRemoval}
+                  onReview={onReviewFile}
+                  onComment={onCommentFile}
+                  onResolveDeletion={onResolveDeletion}
+                />
               ))}
             </ul>
           )}

@@ -3,6 +3,16 @@ import type { FolderKey } from "./folders";
 
 export type FileStatus = "pending" | "approved" | "rejected";
 
+export type FileSource = "participant" | "admin";
+
+/** The participant's request to delete an approved file, resolved by the admin. */
+export type DeletionRequest = {
+  status: "requested" | "approved" | "rejected";
+  requestedAt: number;
+  /** When the admin approved or rejected the request. */
+  resolvedAt?: number;
+};
+
 export type StoredFile = {
   id: string;
   name: string;
@@ -16,7 +26,27 @@ export type StoredFile = {
   /** The admin's note to the participant; absent when there is none. */
   comment?: string;
   commentedAt?: number;
+  /** Who uploaded the file. Absent on files stored before this field existed. */
+  uploadedBy?: FileSource;
+  /** Present once the participant asked to delete an approved file. */
+  deletionRequest?: DeletionRequest;
 };
+
+/**
+ * How the participant may remove a file: "direct" (pending/rejected), "request" (approved:
+ * must ask the admin), "requested" (waiting for the admin) or "allowed" (admin approved the request).
+ */
+export function participantRemoval(file: StoredFile): "direct" | "request" | "requested" | "allowed" {
+  if (file.status !== "approved") return "direct";
+  switch (file.deletionRequest?.status) {
+    case "requested":
+      return "requested";
+    case "approved":
+      return "allowed";
+    default:
+      return "request";
+  }
+}
 
 type StoredFileInput = Omit<StoredFile, "status"> & { status?: FileStatus };
 
@@ -35,6 +65,10 @@ export type FilesAction =
   | { type: "setStatus"; folder: FolderKey; id: string; status: FileStatus; at: number }
   /** Empty (after trimming) clears the comment. `at` is the time of the edit. */
   | { type: "setComment"; folder: FolderKey; id: string; comment: string; at: number }
+  /** Participant asks to delete an approved file. Ignored unless the file needs a (new) request. */
+  | { type: "requestDeletion"; folder: FolderKey; id: string; at: number }
+  /** Admin answers a pending request. `at` is the resolution time. */
+  | { type: "resolveDeletion"; folder: FolderKey; id: string; approved: boolean; at: number }
   | { type: "hydrate"; folders: StoredFolders }
   /** Re-read from storage while mounted: replaces the files without counting as an edit. */
   | { type: "refresh"; folders: StoredFolders };
@@ -86,7 +120,11 @@ function sameFolders(a: Record<FolderKey, StoredFile[]>, b: Record<FolderKey, St
           f.status === y[i].status &&
           f.reviewedAt === y[i].reviewedAt &&
           f.comment === y[i].comment &&
-          f.commentedAt === y[i].commentedAt,
+          f.commentedAt === y[i].commentedAt &&
+          f.uploadedBy === y[i].uploadedBy &&
+          f.deletionRequest?.status === y[i].deletionRequest?.status &&
+          f.deletionRequest?.requestedAt === y[i].deletionRequest?.requestedAt &&
+          f.deletionRequest?.resolvedAt === y[i].deletionRequest?.resolvedAt,
       )
     );
   });
@@ -124,7 +162,49 @@ export function filesReducer(state: FilesState, action: FilesAction): FilesState
         revision: state.revision + 1,
         folders: {
           ...state.folders,
-          [action.folder]: current.map((f) => (f.id === action.id ? { ...f, status: action.status, reviewedAt: action.at } : f)),
+          [action.folder]: current.map((f) => {
+            if (f.id !== action.id) return f;
+            const next: StoredFile = { ...f, status: action.status, reviewedAt: action.at };
+            // Only approved files need a deletion request; any other status is directly deletable.
+            if (action.status !== "approved") delete next.deletionRequest;
+            return next;
+          }),
+        },
+      };
+    }
+    case "requestDeletion": {
+      const current = folderFiles(state, action.folder);
+      const target = current.find((f) => f.id === action.id);
+      if (!target || participantRemoval(target) !== "request") return state;
+      return {
+        ...state,
+        revision: state.revision + 1,
+        folders: {
+          ...state.folders,
+          [action.folder]: current.map((f) =>
+            f.id === action.id ? { ...f, deletionRequest: { status: "requested", requestedAt: action.at } } : f,
+          ),
+        },
+      };
+    }
+    case "resolveDeletion": {
+      const current = folderFiles(state, action.folder);
+      const target = current.find((f) => f.id === action.id);
+      if (!target || target.deletionRequest?.status !== "requested") return state;
+      const request = target.deletionRequest;
+      return {
+        ...state,
+        revision: state.revision + 1,
+        folders: {
+          ...state.folders,
+          [action.folder]: current.map((f) =>
+            f.id === action.id
+              ? {
+                  ...f,
+                  deletionRequest: { ...request, status: action.approved ? "approved" : "rejected", resolvedAt: action.at },
+                }
+              : f,
+          ),
         },
       };
     }
@@ -162,7 +242,7 @@ export function filesReducer(state: FilesState, action: FilesAction): FilesState
 /** Turns picked/dropped files into store entries, splitting off the ones over the cap. */
 export function createEntries(
   files: readonly File[],
-  deps: { makeId: () => string; now: () => number; status?: FileStatus },
+  deps: { makeId: () => string; now: () => number; uploadedBy: FileSource; status?: FileStatus },
 ): { accepted: StoredFile[]; rejected: File[] } {
   const accepted: StoredFile[] = [];
   const rejected: File[] = [];
@@ -179,6 +259,7 @@ export function createEntries(
       addedAt: deps.now(),
       blob: file,
       status: deps.status ?? "pending",
+      uploadedBy: deps.uploadedBy,
     });
   }
   return { accepted, rejected };

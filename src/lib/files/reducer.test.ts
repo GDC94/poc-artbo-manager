@@ -6,6 +6,8 @@ import {
   emptyState,
   filesReducer,
   folderFiles,
+  normalizeFolders,
+  participantRemoval,
   type StoredFile,
 } from "./reducer";
 
@@ -93,6 +95,7 @@ describe("createEntries", () => {
     const { accepted, rejected } = createEntries([small, huge], {
       makeId: () => `id-${++n}`,
       now: () => 42,
+      uploadedBy: "participant",
     });
     expect(accepted).toHaveLength(1);
     expect(accepted[0]).toMatchObject({ id: "id-1", name: "a.txt", size: 3, addedAt: 42 });
@@ -101,7 +104,7 @@ describe("createEntries", () => {
 
   it("falls back to a generic mime type", () => {
     const f = new File(["abc"], "a.bin");
-    const { accepted } = createEntries([f], { makeId: () => "x", now: () => 0 });
+    const { accepted } = createEntries([f], { makeId: () => "x", now: () => 0, uploadedBy: "participant" });
     expect(accepted[0].type).toBe("application/octet-stream");
   });
 });
@@ -193,7 +196,7 @@ describe("file review status", () => {
 
   it("stamps new entries with the given status", () => {
     const file = new File(["x"], "a.png", { type: "image/png" });
-    const deps = { makeId: () => "id", now: () => 1 };
+    const deps = { makeId: () => "id", now: () => 1, uploadedBy: "participant" as const };
     expect(createEntries([file], { ...deps, status: "approved" }).accepted[0].status).toBe("approved");
     expect(createEntries([file], deps).accepted[0].status).toBe("pending");
   });
@@ -225,5 +228,130 @@ describe("file review status", () => {
     expect(added.revision).toBe(hydrated.revision + 1);
     const decided = filesReducer(added, { type: "setStatus", folder: "logos", id: "a", status: "approved", at: 1 });
     expect(decided.revision).toBe(added.revision + 1);
+  });
+});
+
+describe("uploadedBy", () => {
+  const file = new File(["x"], "a.png", { type: "image/png" });
+  const deps = { makeId: () => "id", now: () => 1 };
+
+  it("stamps new entries with the given source", () => {
+    expect(createEntries([file], { ...deps, uploadedBy: "admin" }).accepted[0].uploadedBy).toBe("admin");
+    expect(createEntries([file], { ...deps, uploadedBy: "participant" }).accepted[0].uploadedBy).toBe("participant");
+  });
+
+  it("survives normalizeFolders and hydrate", () => {
+    const stored = { logos: [{ ...entry("a"), status: "approved" as const, uploadedBy: "admin" as const }] };
+    expect(normalizeFolders(stored).logos[0].uploadedBy).toBe("admin");
+    expect(filesReducer(emptyState(), { type: "hydrate", folders: stored }).folders.logos[0].uploadedBy).toBe("admin");
+  });
+});
+
+describe("participantRemoval", () => {
+  const approved = (deletionRequest?: StoredFile["deletionRequest"]): StoredFile => ({
+    ...entry("a"),
+    status: "approved",
+    deletionRequest,
+  });
+
+  it("lets pending and rejected files be deleted directly", () => {
+    expect(participantRemoval(entry("a"))).toBe("direct");
+    expect(participantRemoval({ ...entry("a"), status: "rejected" })).toBe("direct");
+  });
+
+  it("requires a request for approved files with none or a rejected one", () => {
+    expect(participantRemoval(approved())).toBe("request");
+    expect(participantRemoval(approved({ status: "rejected", requestedAt: 1, resolvedAt: 2 }))).toBe("request");
+  });
+
+  it("reports a pending request and an approved one", () => {
+    expect(participantRemoval(approved({ status: "requested", requestedAt: 1 }))).toBe("requested");
+    expect(participantRemoval(approved({ status: "approved", requestedAt: 1, resolvedAt: 2 }))).toBe("allowed");
+  });
+});
+
+describe("deletion requests", () => {
+  const approvedState = () =>
+    filesReducer(emptyState(), {
+      type: "add",
+      folder: "logos",
+      entries: [{ ...entry("a"), status: "approved" }, entry("p")],
+    });
+
+  it("records a request on an approved file with its timestamp", () => {
+    const state = filesReducer(approvedState(), { type: "requestDeletion", folder: "logos", id: "a", at: 7 });
+    const a = state.folders.logos.find((f) => f.id === "a");
+    expect(a?.deletionRequest).toEqual({ status: "requested", requestedAt: 7 });
+    expect(state.revision).toBe(2);
+  });
+
+  it("ignores a request for a file that is not approved, unknown, or already requested", () => {
+    const base = approvedState();
+    expect(filesReducer(base, { type: "requestDeletion", folder: "logos", id: "p", at: 1 })).toBe(base);
+    expect(filesReducer(base, { type: "requestDeletion", folder: "logos", id: "zzz", at: 1 })).toBe(base);
+    const requested = filesReducer(base, { type: "requestDeletion", folder: "logos", id: "a", at: 1 });
+    expect(filesReducer(requested, { type: "requestDeletion", folder: "logos", id: "a", at: 2 })).toBe(requested);
+  });
+
+  it("resolves a pending request as approved or rejected", () => {
+    const requested = filesReducer(approvedState(), { type: "requestDeletion", folder: "logos", id: "a", at: 1 });
+    const ok = filesReducer(requested, { type: "resolveDeletion", folder: "logos", id: "a", approved: true, at: 5 });
+    expect(ok.folders.logos.find((f) => f.id === "a")?.deletionRequest).toEqual({
+      status: "approved",
+      requestedAt: 1,
+      resolvedAt: 5,
+    });
+    const no = filesReducer(requested, { type: "resolveDeletion", folder: "logos", id: "a", approved: false, at: 6 });
+    expect(no.folders.logos.find((f) => f.id === "a")?.deletionRequest).toEqual({
+      status: "rejected",
+      requestedAt: 1,
+      resolvedAt: 6,
+    });
+  });
+
+  it("allows a new request after a rejection", () => {
+    let state = filesReducer(approvedState(), { type: "requestDeletion", folder: "logos", id: "a", at: 1 });
+    state = filesReducer(state, { type: "resolveDeletion", folder: "logos", id: "a", approved: false, at: 2 });
+    state = filesReducer(state, { type: "requestDeletion", folder: "logos", id: "a", at: 3 });
+    expect(state.folders.logos.find((f) => f.id === "a")?.deletionRequest).toEqual({ status: "requested", requestedAt: 3 });
+  });
+
+  it("ignores resolving when there is no pending request", () => {
+    const base = approvedState();
+    expect(filesReducer(base, { type: "resolveDeletion", folder: "logos", id: "a", approved: true, at: 1 })).toBe(base);
+  });
+
+  it("clears the request when the status moves away from approved, keeps it otherwise", () => {
+    const requested = filesReducer(approvedState(), { type: "requestDeletion", folder: "logos", id: "a", at: 1 });
+    const same = filesReducer(requested, { type: "setStatus", folder: "logos", id: "a", status: "approved", at: 2 });
+    expect(same.folders.logos.find((f) => f.id === "a")?.deletionRequest).toBeDefined();
+    const rejected = filesReducer(requested, { type: "setStatus", folder: "logos", id: "a", status: "rejected", at: 3 });
+    expect(rejected.folders.logos.find((f) => f.id === "a")).not.toHaveProperty("deletionRequest");
+  });
+
+  it("refresh adopts a request or resolution made elsewhere", () => {
+    const base = filesReducer(emptyState(), { type: "hydrate", folders: { logos: [{ ...entry("a"), status: "approved" }] } });
+    const requested = filesReducer(base, {
+      type: "refresh",
+      folders: { logos: [{ ...entry("a"), status: "approved", deletionRequest: { status: "requested", requestedAt: 1 } }] },
+    });
+    expect(requested.folders.logos[0].deletionRequest?.status).toBe("requested");
+    const resolved = filesReducer(requested, {
+      type: "refresh",
+      folders: {
+        logos: [
+          { ...entry("a"), status: "approved", deletionRequest: { status: "approved", requestedAt: 1, resolvedAt: 2 } },
+        ],
+      },
+    });
+    expect(resolved.folders.logos[0].deletionRequest?.status).toBe("approved");
+    const gone = filesReducer(resolved, { type: "refresh", folders: { logos: [{ ...entry("a"), status: "approved" }] } });
+    expect(gone.folders.logos[0].deletionRequest).toBeUndefined();
+  });
+
+  it("refresh adopts a changed uploadedBy", () => {
+    const base = filesReducer(emptyState(), { type: "hydrate", folders: { logos: [entry("a")] } });
+    const next = filesReducer(base, { type: "refresh", folders: { logos: [{ ...entry("a"), uploadedBy: "admin" }] } });
+    expect(next.folders.logos[0].uploadedBy).toBe("admin");
   });
 });

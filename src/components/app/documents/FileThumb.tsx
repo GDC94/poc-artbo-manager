@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FileText, X } from "lucide-react";
+import { Check, FileText, Trash2, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { EASE_OUT } from "@/lib/ease";
 import { formatSize } from "@/lib/files/format";
-import type { FileStatus, StoredFile } from "@/lib/files/reducer";
+import { participantRemoval, type FileStatus, type StoredFile } from "@/lib/files/reducer";
 import { cn } from "@/lib/utils";
 
 /** Object URL for an image blob, revoked when the blob changes or the component unmounts. */
@@ -38,6 +38,13 @@ const STATUS_BADGE: Record<FileStatus, { label: string; text: string; dot: strin
   rejected: { label: "Rechazado", text: "text-rose-200", dot: "bg-rose-300" },
 };
 
+/** Participant-side note about the deletion request of an approved file. */
+const REMOVAL_NOTE = {
+  requested: { label: "Eliminación solicitada", text: "text-amber-200" },
+  allowed: { label: "Eliminación aprobada", text: "text-emerald-200" },
+  rejected: { label: "Solicitud de eliminación rechazada", text: "text-rose-200" },
+} as const;
+
 const PRESS = "transition-[transform,background-color,border-color,color] active:scale-[0.97]";
 
 type Props = {
@@ -47,16 +54,35 @@ type Props = {
   onReview?: (file: StoredFile, status: Exclude<FileStatus, "pending">, comment?: string) => void;
   /** Admin only: with `onReview`, shows the comment box; the participant sees the saved comment read-only. */
   onComment?: (file: StoredFile, comment: string) => void;
+  /** Admin only: with `onReview`, answers the participant's pending deletion request. */
+  onResolveDeletion?: (file: StoredFile, approved: boolean) => void;
   className?: string;
 };
 
 /** One file as a horizontal card: preview, name and status on one line; the admin's decision in a footer. */
-export function FileThumb({ file, onRemove, onReview, onComment, className }: Props) {
+export function FileThumb({ file, onRemove, onReview, onComment, onResolveDeletion, className }: Props) {
   const url = useImageUrl(file);
   const reduce = useReducedMotion();
   const extension = file.name.includes(".") ? file.name.split(".").pop()?.slice(0, 5) : null;
   const badge = STATUS_BADGE[file.status];
   const undecided = file.status === "pending";
+  // The admin deletes freely; the participant's options depend on the file's deletion request.
+  const removal = onReview ? "direct" : participantRemoval(file);
+  const requestStatus = file.deletionRequest?.status;
+  const note =
+    removal === "requested"
+      ? REMOVAL_NOTE.requested
+      : removal === "allowed"
+        ? REMOVAL_NOTE.allowed
+        : removal === "request" && requestStatus === "rejected"
+          ? REMOVAL_NOTE.rejected
+          : null;
+  const removeLabel =
+    removal === "request"
+      ? `Solicitar eliminación de ${file.name}`
+      : removal === "requested"
+        ? `Eliminación solicitada de ${file.name}`
+        : `Quitar ${file.name}`;
   const saved = file.comment ?? "";
   const [draft, setDraft] = useState(saved);
   const [prevSaved, setPrevSaved] = useState(saved);
@@ -110,6 +136,12 @@ export function FileThumb({ file, onRemove, onReview, onComment, className }: Pr
               {badge.label}
             </motion.span>
           </div>
+          {note ? (
+            <p className={cn("mt-1 flex items-center gap-1.5 text-xs", note.text)}>
+              <Trash2 aria-hidden className="size-3 shrink-0" />
+              <span className="min-w-0 truncate">{note.label}</span>
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -118,7 +150,8 @@ export function FileThumb({ file, onRemove, onReview, onComment, className }: Pr
         variant="ghost-destructive"
         size="icon-sm"
         className={cn("order-2 mr-3 shrink-0 rounded-lg @2xl:order-3", PRESS)}
-        aria-label={`Quitar ${file.name}`}
+        aria-label={removeLabel}
+        disabled={removal === "requested"}
         onClick={() => onRemove(file)}
       >
         <X aria-hidden />
@@ -159,6 +192,40 @@ export function FileThumb({ file, onRemove, onReview, onComment, className }: Pr
               Aprobar
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Pending deletion request: its own full-width row above the comment box. */}
+      {onReview && onResolveDeletion && file.deletionRequest?.status === "requested" ? (
+        <div className="order-3 col-span-full flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.07] p-2.5 @2xl:order-4 @2xl:px-3">
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-amber-200">
+            <Trash2 aria-hidden className="size-3.5 shrink-0" />
+            El participante solicitó eliminar este archivo
+          </p>
+          <div className="flex w-full gap-2 @md:w-auto">
+            <Button
+              type="button"
+              variant="subtle"
+              size="sm"
+              shape="pill"
+              className={cn("flex-1 @md:flex-none", PRESS)}
+              aria-label={`Rechazar solicitud de eliminación de ${file.name}`}
+              onClick={() => onResolveDeletion(file, false)}
+            >
+              Rechazar solicitud
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              shape="pill"
+              className={cn("flex-1 @md:flex-none", PRESS)}
+              aria-label={`Aprobar eliminación de ${file.name}`}
+              onClick={() => onResolveDeletion(file, true)}
+            >
+              Aprobar eliminación
+            </Button>
+          </div>
         </div>
       ) : null}
 

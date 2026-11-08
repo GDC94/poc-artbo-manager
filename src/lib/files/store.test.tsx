@@ -27,7 +27,7 @@ const stored = (id: string, status?: string) => ({
 });
 
 function Probe() {
-  const { state, addFiles, setFileStatus, setFileComment } = useFiles();
+  const { state, addFiles, setFileStatus, setFileComment, requestFileDeletion, resolveFileDeletion } = useFiles();
   const files = state.folders.logos ?? [];
   return (
     <div>
@@ -40,6 +40,9 @@ function Probe() {
       <button onClick={() => addFiles("logos", [new File(["x"], "n.png", { type: "image/png" })])}>add</button>
       <button onClick={() => setFileStatus("logos", "a", "approved")}>approve-a</button>
       <button onClick={() => setFileComment("logos", "a", "Falta fondo")}>comment-a</button>
+      <button onClick={() => requestFileDeletion("logos", "a")}>request-a</button>
+      <button onClick={() => resolveFileDeletion("logos", "a", true)}>allow-a</button>
+      <button onClick={() => resolveFileDeletion("logos", "a", false)}>deny-a</button>
       <button onClick={() => setFileStatus("logos", "nope", "approved")}>approve-unknown</button>
     </div>
   );
@@ -183,5 +186,39 @@ describe("FilesProvider", () => {
     await waitFor(() => expect(setSpy).toHaveBeenCalled());
     expect(screen.getByText("a:approved")).toBeTruthy();
     expect((db.get(filesKey("p-01")) as { logos: { status: string }[] }).logos[0].status).toBe("approved");
+  });
+
+  const saved = () => (db.get(filesKey("p-01")) as { logos: Record<string, unknown>[] }).logos;
+
+  it("stamps uploads as participant by default and as admin when told", async () => {
+    const first = mount();
+    await hydrated();
+    fireEvent.click(screen.getByText("add"));
+    await waitFor(() => expect(saved()[0].uploadedBy).toBe("participant"));
+    first.unmount();
+    db.clear();
+    mount({ uploadedBy: "admin" });
+    await hydrated();
+    fireEvent.click(screen.getByText("add"));
+    await waitFor(() => expect(saved()[0].uploadedBy).toBe("admin"));
+  });
+
+  it("keeps uploadedBy through the legacy migration", async () => {
+    db.set(LEGACY_FILES_KEY, { logos: [{ ...stored("a", "approved"), uploadedBy: "participant" }] });
+    mount({ migrateLegacy: true });
+    await screen.findByText("a:pending");
+    expect(saved()[0].uploadedBy).toBe("participant");
+  });
+
+  it("persists a deletion request and its resolution with timestamps", async () => {
+    db.set(filesKey("p-01"), { logos: [stored("a", "approved")] });
+    mount();
+    await hydrated();
+    fireEvent.click(screen.getByText("request-a"));
+    await waitFor(() => expect(setSpy).toHaveBeenCalledTimes(1));
+    expect(saved()[0].deletionRequest).toMatchObject({ status: "requested", requestedAt: expect.any(Number) });
+    fireEvent.click(screen.getByText("allow-a"));
+    await waitFor(() => expect(setSpy).toHaveBeenCalledTimes(2));
+    expect(saved()[0].deletionRequest).toMatchObject({ status: "approved", resolvedAt: expect.any(Number) });
   });
 });

@@ -18,6 +18,7 @@ import {
   emptyState,
   filesReducer,
   folderFiles,
+  type FileSource,
   type FileStatus,
   type FilesState,
   type StoredFile,
@@ -32,6 +33,10 @@ type Value = {
   setFileStatus: (folder: FolderKey, id: string, status: FileStatus) => void;
   /** Sets the admin's comment on a file; an empty text clears it. Unknown ids are ignored. */
   setFileComment: (folder: FolderKey, id: string, comment: string) => void;
+  /** Participant asks to delete an approved file; ignored unless the file needs a request. */
+  requestFileDeletion: (folder: FolderKey, id: string) => void;
+  /** Admin answers a pending deletion request. Approving does not delete the file. */
+  resolveFileDeletion: (folder: FolderKey, id: string, approved: boolean) => void;
 };
 
 const FilesContext = createContext<Value | null>(null);
@@ -47,6 +52,8 @@ type ProviderProps = {
   ownerId?: string;
   /** Status given to files added through this provider. Admin uploads pass "approved". */
   initialFileStatus?: FileStatus;
+  /** Who is uploading through this provider, stamped on new files. Admin surfaces pass "admin". */
+  uploadedBy?: FileSource;
   /** Moves the pre-ownership key into this owner's key on first load (participant side only). */
   migrateLegacy?: boolean;
 };
@@ -55,6 +62,7 @@ export function FilesProvider({
   children,
   ownerId,
   initialFileStatus = "pending",
+  uploadedBy = "participant",
   migrateLegacy = false,
 }: ProviderProps) {
   const [state, dispatch] = useReducer(filesReducer, undefined, emptyState);
@@ -133,10 +141,11 @@ export function FilesProvider({
       makeId: () => crypto.randomUUID(),
       now: () => Date.now(),
       status: initialFileStatus,
+      uploadedBy,
     });
     if (accepted.length > 0) dispatch({ type: "add", folder, entries: accepted });
     return rejected;
-  }, [initialFileStatus]);
+  }, [initialFileStatus, uploadedBy]);
 
   const removeFile = useCallback((folder: FolderKey, id: string) => {
     dispatch({ type: "remove", folder, id });
@@ -150,9 +159,17 @@ export function FilesProvider({
     dispatch({ type: "setComment", folder, id, comment, at: Date.now() });
   }, []);
 
+  const requestFileDeletion = useCallback((folder: FolderKey, id: string) => {
+    dispatch({ type: "requestDeletion", folder, id, at: Date.now() });
+  }, []);
+
+  const resolveFileDeletion = useCallback((folder: FolderKey, id: string, approved: boolean) => {
+    dispatch({ type: "resolveDeletion", folder, id, approved, at: Date.now() });
+  }, []);
+
   const value = useMemo(
-    () => ({ state, addFiles, removeFile, setFileStatus, setFileComment }),
-    [state, addFiles, removeFile, setFileStatus, setFileComment],
+    () => ({ state, addFiles, removeFile, setFileStatus, setFileComment, requestFileDeletion, resolveFileDeletion }),
+    [state, addFiles, removeFile, setFileStatus, setFileComment, requestFileDeletion, resolveFileDeletion],
   );
   return <FilesContext.Provider value={value}>{children}</FilesContext.Provider>;
 }

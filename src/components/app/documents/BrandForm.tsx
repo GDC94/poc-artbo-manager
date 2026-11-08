@@ -14,7 +14,7 @@ import { useToast } from "@/components/app/shared/ToastProvider";
 import { useBrand } from "@/lib/brand/store";
 import { summarizeFolder } from "@/lib/files/format";
 import type { FolderDef, FolderKey } from "@/lib/files/folders";
-import { folderFiles } from "@/lib/files/reducer";
+import { folderFiles, participantRemoval } from "@/lib/files/reducer";
 import { useFiles } from "@/lib/files/store";
 import { cn } from "@/lib/utils";
 
@@ -59,7 +59,7 @@ function BrandFormFields({
   const pickerRef = useRef<HTMLInputElement>(null);
   const pickerTarget = useRef<FolderKey | null>(null);
   const upload = useUpload();
-  const { review, comment } = useReview();
+  const { review, comment, requestDeletion, resolveDeletion } = useReview();
 
   const openPicker = (folder: FolderKey) => {
     pickerTarget.current = folder;
@@ -204,8 +204,27 @@ function BrandFormFields({
           if (sheetFolder) openPicker(sheetFolder.key);
         }}
         onRemoveFile={(file) => {
-          if (sheetFolder) removeFile(sheetFolder.key, file.id);
+          if (!sheetFolder) return;
+          // Re-check against the current file: approved files need an approved deletion request.
+          const current = sheetFiles.find((f) => f.id === file.id);
+          if (!current) return;
+          if (!reviewable && !["direct", "allowed"].includes(participantRemoval(current))) return;
+          removeFile(sheetFolder.key, file.id);
         }}
+        onRequestDeletion={
+          reviewable
+            ? undefined
+            : (file) => {
+                if (sheetFolder) requestDeletion(sheetFolder.key, file);
+              }
+        }
+        onResolveDeletion={
+          reviewable
+            ? (file, approved) => {
+                if (sheetFolder) resolveDeletion(sheetFolder.key, file, approved);
+              }
+            : undefined
+        }
         onReviewFile={
           reviewable
             ? (file, status, draft) => {

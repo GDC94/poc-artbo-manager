@@ -1,4 +1,11 @@
-export type NotificationKind = "uploaded" | "approved" | "rejected" | "commented";
+export type NotificationKind =
+  | "uploaded"
+  | "approved"
+  | "rejected"
+  | "commented"
+  | "deletion_requested"
+  | "deletion_approved"
+  | "deletion_rejected";
 
 /** Who is looking at the bell; there is no auth, the route decides. */
 export type Audience = "participant" | "admin";

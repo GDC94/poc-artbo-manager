@@ -7,9 +7,9 @@ import type { FolderKey } from "@/lib/files/folders";
 import type { FileStatus, StoredFile } from "@/lib/files/reducer";
 import { useFiles } from "@/lib/files/store";
 
-/** Admin review actions on a file, each confirmed in a toast. */
+/** Review actions on a file (admin decisions and deletion requests), each confirmed in a toast. */
 export function useReview() {
-  const { setFileStatus, setFileComment } = useFiles();
+  const { setFileStatus, setFileComment, requestFileDeletion, resolveFileDeletion } = useFiles();
   const { toast } = useToast();
 
   /** Records a decision; a `comment` (the dirty draft) is saved in the same action. */
@@ -31,5 +31,23 @@ export function useReview() {
     [setFileComment, toast],
   );
 
-  return { review, comment };
+  /** Participant side: asks the admin to delete an approved file. */
+  const requestDeletion = useCallback(
+    (folder: FolderKey, file: StoredFile) => {
+      requestFileDeletion(folder, file.id);
+      toast("Solicitud de eliminación enviada");
+    },
+    [requestFileDeletion, toast],
+  );
+
+  /** Admin side: answers a deletion request. Approving only lets the participant delete; it deletes nothing. */
+  const resolveDeletion = useCallback(
+    (folder: FolderKey, file: StoredFile, approved: boolean) => {
+      resolveFileDeletion(folder, file.id, approved);
+      toast(approved ? `Eliminación de ${file.name} aprobada` : `Solicitud de eliminación de ${file.name} rechazada`);
+    },
+    [resolveFileDeletion, toast],
+  );
+
+  return { review, comment, requestDeletion, resolveDeletion };
 }

@@ -45,6 +45,17 @@ describe("NotificationsPanel", () => {
     expect(screen.getByText("Aprobado")).toBeTruthy();
   });
 
+  it("labels deletion notifications", () => {
+    setup([
+      item("a", { kind: "deletion_requested" }),
+      item("b", { kind: "deletion_approved" }),
+      item("c", { kind: "deletion_rejected" }),
+    ]);
+    expect(screen.getByText("Eliminación")).toBeTruthy();
+    expect(screen.getByText("Eliminación aprobada")).toBeTruthy();
+    expect(screen.getByText("Eliminación rechazada")).toBeTruthy();
+  });
+
   it("filters to unread and shows a filtered empty state", () => {
     setup([item("a", { read: true })]);
     fireEvent.click(screen.getByRole("tab", { name: "Nuevas 0" }));

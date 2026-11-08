@@ -23,4 +23,13 @@ describe("notificationHref", () => {
       "/admin/participantes/p-02/documentos/logos",
     );
   });
+  it.each(["deletion_requested", "deletion_approved", "deletion_rejected"] as const)(
+    "routes %s to the folder page like the other kinds",
+    (kind) => {
+      expect(notificationHref(n({ kind }), "participant")).toBe("/documentos/logos");
+      expect(notificationHref(n({ kind, participantId: "p-02" }), "admin")).toBe(
+        "/admin/participantes/p-02/documentos/logos",
+      );
+    },
+  );
 });

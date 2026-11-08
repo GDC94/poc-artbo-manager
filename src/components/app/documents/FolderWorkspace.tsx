@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useBrand } from "@/lib/brand/store";
 import { summarizeFolder } from "@/lib/files/format";
 import type { FolderDef } from "@/lib/files/folders";
-import { folderFiles } from "@/lib/files/reducer";
+import { folderFiles, participantRemoval } from "@/lib/files/reducer";
 import { useFiles } from "@/lib/files/store";
 
 import { FileThumb } from "./FileThumb";
@@ -30,11 +30,18 @@ export function FolderWorkspace({
   const { brand } = useBrand();
   const { state, removeFile } = useFiles();
   const upload = useUpload();
-  const { review, comment } = useReview();
+  const { review, comment, requestDeletion, resolveDeletion } = useReview();
   const files = folderFiles(state, folder.key);
-  const { askRemoval, dialog } = useFileRemovalDialog((f) => removeFile(folder.key, f.id), {
-    portal: true,
-  });
+  const { askRemoval, dialog } = useFileRemovalDialog(
+    (f) => {
+      // Re-check against the current file: it may have been approved since the dialog opened.
+      const current = files.find((x) => x.id === f.id);
+      if (!current) return;
+      if (!reviewable && !["direct", "allowed"].includes(participantRemoval(current))) return;
+      removeFile(folder.key, f.id);
+    },
+    { portal: true, onRequest: reviewable ? undefined : (f) => requestDeletion(folder.key, f) },
+  );
 
   return (
     <div className="space-y-6 pt-8 lg:pt-[60px]">
@@ -61,6 +68,7 @@ export function FolderWorkspace({
                 onRemove={askRemoval}
                 onReview={reviewable ? (f, status, draft) => review(folder.key, f, status, draft) : undefined}
                 onComment={reviewable ? (f, text) => comment(folder.key, f, text) : undefined}
+                onResolveDeletion={reviewable ? (f, approved) => resolveDeletion(folder.key, f, approved) : undefined}
               />
             ))}
           </ul>

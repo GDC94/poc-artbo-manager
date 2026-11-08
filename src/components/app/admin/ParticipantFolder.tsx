@@ -42,7 +42,7 @@ export function ParticipantFolder({ id, folder }: { id: string; folder: FolderKe
         }
       />
       <BrandProvider key={id} ownerId={id} defaultBrand={defaultBrand}>
-        <FilesProvider key={id} ownerId={id} initialFileStatus="approved">
+        <FilesProvider key={id} ownerId={id} initialFileStatus="approved" uploadedBy="admin">
           <FolderWorkspace folder={folderDef} reviewable backHref={`${detailHref}?tab=documentos`} />
         </FilesProvider>
       </BrandProvider>

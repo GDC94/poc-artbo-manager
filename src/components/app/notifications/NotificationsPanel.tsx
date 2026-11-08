@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Check, FileUp, MessageSquare, X, type LucideIcon } from "lucide-react";
+import { Bell, Check, FileUp, MessageSquare, Trash2, X, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { HoverHighlight, HoverHighlightGroup, useHoverHighlightItem } from "@/components/app/shared/HoverHighlight";
@@ -14,6 +14,9 @@ const KIND: Record<NotificationKind, { label: string; color: string; Icon: Lucid
   approved: { label: "Aprobado", color: "bg-[#22A65A]", Icon: Check },
   rejected: { label: "Rechazado", color: "bg-rose-400", Icon: X },
   commented: { label: "Comentario", color: "bg-[#E9A208]", Icon: MessageSquare },
+  deletion_requested: { label: "Eliminación", color: "bg-[#E9A208]", Icon: Trash2 },
+  deletion_approved: { label: "Eliminación aprobada", color: "bg-[#22A65A]", Icon: Trash2 },
+  deletion_rejected: { label: "Eliminación rechazada", color: "bg-rose-400", Icon: Trash2 },
 };
 
 type Filter = "all" | "unread";
