@@ -1,26 +1,210 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* The app is always dark (ported from bitworks' `[data-theme="apple"]` theme). */
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: var(--font-helvetica), system-ui, -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-inverted: var(--inverted);
+  --color-inverted-foreground: var(--inverted-foreground);
+  --color-link: var(--link);
+  --color-auth-line: var(--auth-line);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --breakpoint-3xl: 1920px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  color-scheme: dark;
+  --background: #0e0e10;
+  --foreground: #ffffff;
+  --card: #272729;
+  --card-foreground: #ffffff;
+  --popover: #272729;
+  --popover-foreground: #ffffff;
+  --primary: #0071e3;
+  --primary-foreground: #ffffff;
+  --secondary: #0071e3;
+  --secondary-foreground: #ffffff;
+  --muted: #272729;
+  --muted-foreground: #cccccc;
+  --accent: #0071e3;
+  --accent-foreground: #ffffff;
+  --destructive: #ff3b30;
+  --destructive-foreground: #ffffff;
+  --border: #35353a;
+  --input: #2d2d31;
+  --ring: #0071e3;
+  --inverted: #ffffff;
+  --inverted-foreground: #000000;
+  --link: #2997ff;
+  --auth-line: rgb(187 187 187 / 0.2);
+  --radius: 0.5rem;
+  --chart-1: #2997ff;
+  --chart-2: #0071e3;
+  --chart-3: #5c5c64;
+  --chart-4: #35353a;
+  --chart-5: #272729;
+  --sidebar: #0e0e10;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #0071e3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #272729;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #35353a;
+  --sidebar-ring: #0071e3;
+
+  --apple-blue: #0071e3;
+  --apple-blue-hover: #0062c4;
+  --apple-nav-bg: #17171a;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Topbar surface. */
+.apple-glass {
+  background: var(--apple-nav-bg);
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+/* Text link whose underline paints left to right on hover. */
+.apple-underline-draw {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+}
+button.apple-underline-draw {
+  display: inline-flex;
+}
+.apple-underline-draw > [data-underline] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: currentColor;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 280ms ease-out;
+  pointer-events: none;
+}
+.apple-underline-draw:hover > [data-underline],
+.apple-underline-draw:focus-visible > [data-underline] {
+  clip-path: inset(0 0 0 0);
+}
+.apple-underline-draw:disabled > [data-underline] {
+  clip-path: inset(0 100% 0 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .apple-underline-draw > [data-underline] {
+    transition: none;
+  }
+}
+
+/* Route fade-in; `backwards` leaves no residual transform on the wrapper. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+.page-enter {
+  animation: page-enter 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+}
+
+/* ARTBO loader: wordmark fills left-to-right, held briefly at full. */
+@keyframes artbo-loader-fill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  80%,
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.artbo-loader-fill {
+  animation: artbo-loader-fill 1.2s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .artbo-loader-fill {
+    animation: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: background-color 9999s ease-in-out 0s;
 }
