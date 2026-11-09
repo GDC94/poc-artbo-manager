@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { SEED_REQUIREMENTS, SEED_SELECTIONS } from "@/lib/mock/participants";
+import { MOCK_USER } from "@/lib/mock/user";
+
 import {
   addRequirement,
   activeIds,
@@ -105,5 +108,9 @@ describe("visibleFoldersFor", () => {
   });
   it("is empty for an unknown participant", () => {
     expect(visibleFoldersFor("nobody", reqs, { p: ["a"] })).toEqual([]);
+  });
+  it("shows the viewer only the folders admin enabled for its participant", () => {
+    const keys = visibleFoldersFor(MOCK_USER.participantId, SEED_REQUIREMENTS, SEED_SELECTIONS).map((f) => f.key);
+    expect(keys).toEqual(["imagenes", "logos", "guias-de-marca"]);
   });
 });

@@ -1,23 +1,18 @@
 export type MockUser = {
   /** Seeded participant this viewer is (there is no auth); drives which folders are visible. */
   participantId: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
   jobFunction: string;
   jobTitle: string;
-  email: string;
 };
 
-/** Fake participant. Nothing here is real. */
+/**
+ * Fake viewer. Name, email and phone live on the admin participant record this
+ * id points at (see `SEED_PARTICIPANTS`); only what admin does not manage is here.
+ */
 export const MOCK_USER: MockUser = {
   participantId: "p-01",
-  firstName: "Sebastián",
-  lastName: "Ramírez",
-  phone: "57 300 123 4567",
   jobFunction: "design",
   jobTitle: "manager",
-  email: "demo@artbo-intern.test",
 };
 
 export const MOCK_BRAND = {

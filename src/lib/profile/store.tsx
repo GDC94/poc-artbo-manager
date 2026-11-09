@@ -3,7 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { MOCK_USER } from "@/lib/mock/user";
+import { splitFullName } from "@/lib/profile/names";
 import { readLocal, writeLocal } from "@/lib/storage/local";
+import { seedViewerParticipant } from "@/lib/viewer/useViewer";
 
 export type Profile = {
   firstName: string;
@@ -14,15 +16,17 @@ export type Profile = {
   email: string;
 };
 
-const KEY = "artbo:profile:v1";
+// v2: the viewer became the admin participant record; an older saved profile
+// still carries the previous placeholder name, so it must not be read back.
+const KEY = "artbo:profile:v2";
 
+const viewer = seedViewerParticipant();
 const DEFAULT_PROFILE: Profile = {
-  firstName: MOCK_USER.firstName,
-  lastName: MOCK_USER.lastName,
-  phone: MOCK_USER.phone,
+  ...splitFullName(viewer.fullName),
+  phone: viewer.phone,
   jobFunction: MOCK_USER.jobFunction,
   jobTitle: MOCK_USER.jobTitle,
-  email: MOCK_USER.email,
+  email: viewer.email,
 };
 
 function isProfile(value: unknown): value is Profile {
